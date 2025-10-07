@@ -1,0 +1,9 @@
+starlette
+uvicorn
+fastapi
+pydantic
+openai
+python-dotenv
+qdrant-client
+PyMuPDF
+sentence-transformers
