@@ -22,6 +22,9 @@ class CORSHeaderMiddleware(BaseHTTPMiddleware):
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Expose-Headers"] = "*"
 
+        # Add private network access headers for Chrome's security policy
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+
         return response
 
 
