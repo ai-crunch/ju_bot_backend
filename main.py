@@ -5,6 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from routers.chat import router as chat_router
 from routers.agent import router as agent_router
+from routers.feedback import router as feedback_router
 
 import config
 
@@ -41,6 +42,7 @@ app.add_middleware(CORSHeaderMiddleware)
 
 app.include_router(chat_router)
 app.include_router(agent_router)
+app.include_router(feedback_router)
 
 
 @app.get("/")

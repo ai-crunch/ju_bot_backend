@@ -16,5 +16,23 @@ services:
     volumes:
       - qdrant_ju_bot_data:/qdrant/storage
 
+  mongodb:
+    image: mongo:7.0
+    container_name: ju_bot_mongodb
+    restart: always
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodb_ju_bot_data:/data/db
+    expose:
+      - 27017
+    # Running without authentication for development
+    # To enable auth, uncomment the environment section below
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-ju_bot_feedback}
+
 volumes:
   qdrant_ju_bot_data:
+  mongodb_ju_bot_data:

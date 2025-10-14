@@ -7,3 +7,5 @@ python-dotenv
 qdrant-client
 PyMuPDF
 sentence-transformers
+agno
+pymongo
