@@ -210,3 +210,6 @@ __marimo__/
 .DS_Store
 *.ipynb
 
+# Ignore all .md files except README.md
+*.md
+!README.md
