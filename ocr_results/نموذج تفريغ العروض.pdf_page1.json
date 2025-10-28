@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "file_name": "نموذج تفريغ العروض.pdf",
+    "file_path": "data/Departments/Central Tenders Department/نموذج تفريغ العروض.pdf",
+    "page_number": 1,
+    "timestamp": "2025-10-28T09:52:00.378915",
+    "model": "gpt-4o-mini"
+  },
+  "text": "### Document Analysis\n\n**Header:**\n- The University of Jordan (الجامعة الأردنية)\n  \n**Form Title:**\n- نموذج ترخيص العروض\n\n**Form Details:**\n- رقم النموذج: CTD-01-01-13\n- عدد الصفحات: 02\n\n---\n\n**Section for Item Details:**\n- رقم العطاء (Tender Number): \n- رقم المادة (Item Number): \n- اسم المادة (Item Name): \n- تاريخ فتح العروض (Tender Opening Date): \n\n**Column Headings for Specifications:**\n- **ملاحظات** (Notes) \n- **طريقة التسليم** (Delivery Method)\n- **السعر الإجمالي** (Total Price)\n- **السعر الإفرادي** (Unit Price)\n- **الماركة / الشركة المصنعة** (Brand / Manufacturer)\n- **المنتج** (Product)\n\n### Table Structure:\nThe table is organized with rows and columns designed for data entry regarding various items. The specific columns include:\n\n1. **ملاحظات**: A section for additional notes.\n2. **طريقة التسليم**: To specify the delivery method.\n3. **السعر الإجمالي**: The overall price for the item.\n4. **السعر الإفرادي**: The individual price per unit.\n5. **الماركة / الشركة المصنعة**: Brand or manufacturer information.\n6. **المنتج**: The specific product name.\n\n### Contextual Notes:\nThis document appears to be a tender form used by the University of Jordan for requesting offers on different items. Each section is intended for detailed input about the acquisition, with focus on pricing, manufacturing details, and delivery specifications."
+}

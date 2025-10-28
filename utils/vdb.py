@@ -113,6 +113,74 @@ class QdrantVDB:
         )
         return points
 
+    def embed_ocr_results(
+        self, ocr_data: Dict, file_metadata: Dict, chunk_threshold: int = 300
+    ):
+        """
+        Embed OCR results with chunking based on word count threshold.
+
+        Args:
+            ocr_data: Dictionary containing OCR metadata and text
+            file_metadata: Additional metadata extracted from file path
+            chunk_threshold: Word count threshold for chunking text
+        """
+        text = ocr_data.get("text", "")
+        ocr_metadata = ocr_data.get("metadata", {})
+
+        # Count words in the text
+        word_count = len(text.split())
+
+        if word_count <= chunk_threshold:
+            # Text is small enough, embed as single chunk
+            chunks = [text]
+        else:
+            # Text is too large, split into chunks
+            chunks = self.splitter.split(text)
+
+        embeddings = self.embedder.embed(chunks)
+
+        points = []
+        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            # Combine OCR metadata with file metadata
+            enhanced_metadata = {
+                **file_metadata,
+                "file_name": ocr_metadata.get("file_name", ""),
+                "original_file_path": ocr_metadata.get("file_path", ""),
+                "page_number": ocr_metadata.get("page_number", 1),
+                "timestamp": ocr_metadata.get("timestamp", ""),
+                "ocr_model": ocr_metadata.get("model", ""),
+                "chunk_index": idx,
+                "total_chunks": len(chunks),
+                "word_count": len(chunk.split()),
+                "is_web_source": False,
+            }
+
+            # Generate unique ID based on file path and page number and chunk index
+            # Use abs() to ensure positive ID and add timestamp to avoid collisions
+            unique_id = abs(
+                hash(
+                    f"{ocr_metadata.get('file_path', '')}_{ocr_metadata.get('page_number', 1)}_{idx}_{ocr_metadata.get('timestamp', '')}"
+                )
+            ) % (2**63 - 1)
+
+            points.append(
+                PointStruct(
+                    id=unique_id,
+                    vector=embedding,
+                    payload={
+                        "text": chunk,
+                        "file_path": ocr_metadata.get("file_path", ""),
+                        "metadata": enhanced_metadata,
+                    },
+                )
+            )
+
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+        )
+        return points
+
     def retrieve(self, question: str):
         embedding = self.embedder.embed(question)
         results = self.client.search(

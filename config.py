@@ -8,7 +8,7 @@ DATA_DIR_PATH = os.path.join("data")
 QDRANT = {
     "host": os.getenv("QDRANT_HOST", "localhost"),
     "port": int(os.getenv("QDRANT_PORT", 6333)),
-    "collection_name": "ju_bot_vdb",
+    "collection_name": "ju_bot_vdb_with_ocr",
 }
 
 EMBEDDER = {
@@ -27,4 +27,11 @@ MONGODB = {
     "password": os.getenv("MONGO_ROOT_PASSWORD", "password"),
     "database": os.getenv("MONGO_DATABASE", "ju_bot_feedback"),
     "collection": "feedback_data",
+}
+
+OCR = {
+    "results_dir": "ocr_results",
+    "chunk_threshold": int(
+        os.getenv("OCR_CHUNK_THRESHOLD", 300)
+    ),  # Words threshold for chunking
 }

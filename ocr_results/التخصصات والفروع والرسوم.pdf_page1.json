@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "file_name": "التخصصات والفروع والرسوم.pdf",
+    "file_path": "data/Units/Admission and Registraion/التخصصات والفروع والرسوم.pdf",
+    "page_number": 1,
+    "timestamp": "2025-10-28T10:10:51.983897",
+    "model": "gpt-4o-mini"
+  },
+  "text": "The document is a table showing university specializations and their corresponding metrics related to admission requirements and university fees for different academic branches.\n\n### Table Summary:\n\n#### Title: \n\"كليات وتخصصات الجامعة الأردنية/ الحدود الدنيا لمعدلات القبول / عدد ساعات الخطة / الرسوم الجامعية / فروع التخصصات\"\n\n#### Column Headers:\n1. **الكلية** (College)\n2. **التخصص** (Major)\n3. Admission criteria and metrics (various columns with checkmarks indicating specific requirements)\n4. **عدد الساعات** (Number of Hours)\n5. **الرسوم** (Fees)\n\n#### Selected Rows (Examples):\n- **College of Medicine (كلية الطب)**\n   - Major: **Medicine (طب الإسنات)**\n   - Admission Criteria: ✔\n   - Hours: 500\n   - Fees: 250\n   - Other metrics related to program specifics and admissions.\n\n- **College of Engineering (الجامعة الهندسية)**\n   - Various engineering programs with corresponding admission metrics, hours, and fees all listed with specific criteria checks.\n\n- **College of Science (علم الحاسوب)**\n   - Major: **Computer Science (علم الحاسوب)**\n   - Admission: Requires specific scores, hours, and fees structured similarly.\n\n#### Additional Notes:\n- The rows include various specializations with specific values for hours and fees.\n- Some standards, like admission scores, vary between programs.\n\nIf you need further details or specific sections described, feel free to ask!"
+}
