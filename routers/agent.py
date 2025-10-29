@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from utils.vdb import QdrantVDB
 from prompts.qa import QUESTION_PROMPT
 from prompts.system import SYSTEM_PROMPT
+from models.chat_history import QADict, chat_history_db
 
 import config
 
@@ -37,6 +38,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
+    chat_id: Optional[str] = None  # Optional chat_id for existing chats
 
 
 class SourceMetadata(BaseModel):
@@ -58,6 +60,7 @@ class Source(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     sources: List[Source]
+    chat_id: str  # Include chat_id in response
 
     class Config:
         json_encoders = {
@@ -221,9 +224,55 @@ def agent_response(messages: List[Message]) -> tuple[str, List[Source]]:
 def chat(request: ChatRequest):
     print("Hitting the agent endpoint | Question: ", request.messages[-1].content)
 
+    # Handle chat_id - create new if not provided
+    chat_id = request.chat_id
+    if not chat_id:
+        try:
+            chat_id = chat_history_db.create_new_chat()
+            print(f"Created new chat with ID: {chat_id}")
+        except Exception as e:
+            print(f"Error creating new chat: {e}")
+            # Continue without chat history if DB fails
+            chat_id = "temp_agent_" + str(hash(str(request.messages)))[:8]
+
     try:
         messages = request.messages
         response, sources = agent_response(messages)
+
+        # Save the Q&A to chat history
+        try:
+            question = messages[-1].content
+            # For agent, the prompt is the full conversation with agent instructions
+            prompt = f"Agent conversation with {len(messages)} messages. Last question: {question}"
+
+            # Convert sources to dict format for storage
+            references = []
+            for source in sources:
+                ref_dict = {
+                    "text": source.text,
+                    "file_path": source.file_path,
+                    "metadata": source.metadata.model_dump() if source.metadata else {},
+                }
+                references.append(ref_dict)
+
+            # Create QADict
+            qa_dict = QADict(
+                question=question,
+                answer=response,
+                prompt=prompt,
+                references=references,
+                feedback=0,  # No feedback initially
+                user_feedback_str="",
+            )
+
+            # Add to chat history
+            chat_history_db.add_message_to_chat(chat_id, qa_dict)
+            print(f"Saved agent message to chat history: {chat_id}")
+
+        except Exception as e:
+            print(f"Error saving agent response to chat history: {e}")
+            # Continue even if chat history fails
+
     except Exception as e:
         print("Error: ", e)
         response = (
@@ -234,4 +283,4 @@ def chat(request: ChatRequest):
     print("Response: ", response)
     print("Sources: ", sources)
     print("Returning the response")
-    return ChatResponse(response=response, sources=sources)
+    return ChatResponse(response=response, sources=sources, chat_id=chat_id)

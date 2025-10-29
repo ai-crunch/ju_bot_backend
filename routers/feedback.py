@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Literal, Optional
 from datetime import datetime
 from pymongo import MongoClient
+from models.chat_history import chat_history_db
 import config
 
 router = APIRouter(
@@ -60,6 +61,9 @@ class FeedbackData(BaseModel):
     session_id: Optional[str] = None
     user_id: Optional[str] = None
     message_id: Optional[str] = None  # Add message_id for deduplication
+    # New fields for chat history integration
+    chat_id: Optional[str] = None
+    message_index: Optional[int] = None  # Index of message in chat history
 
 
 class FeedbackResponse(BaseModel):
@@ -70,8 +74,50 @@ class FeedbackResponse(BaseModel):
 
 @router.post("/save", response_model=FeedbackResponse)
 async def save_feedback(feedback: FeedbackData):
-    """Save feedback data to MongoDB with deduplication"""
+    """Save feedback data to MongoDB with deduplication and chat history integration"""
     try:
+        # First, try to update chat history if chat_id and message_index are provided
+        if feedback.chat_id is not None and feedback.message_index is not None:
+            try:
+                # Determine what to update based on feedback type
+                feedback_value = None
+                user_feedback_str = None
+                thumbs_down_message_feedback = None
+
+                if feedback.feedback_type == "thumbs_up":
+                    feedback_value = 1
+                elif feedback.feedback_type == "thumbs_down":
+                    feedback_value = -1
+                    # If there's a message with thumbs down, it's thumbs down specific feedback
+                    if feedback.feedback_message:
+                        thumbs_down_message_feedback = feedback.feedback_message
+                elif feedback.feedback_type == "feedback":
+                    # General feedback doesn't change the thumbs value, only adds text
+                    user_feedback_str = feedback.feedback_message or ""
+
+                # Update chat history with only the relevant fields
+                success = chat_history_db.update_message_feedback(
+                    chat_id=feedback.chat_id,
+                    message_index=feedback.message_index,
+                    feedback=feedback_value,
+                    user_feedback_str=user_feedback_str,
+                    thumbs_down_message_feedback=thumbs_down_message_feedback,
+                )
+
+                if success:
+                    print(
+                        f"Updated chat history feedback for chat {feedback.chat_id}, message {feedback.message_index}"
+                    )
+                else:
+                    print(
+                        f"Failed to update chat history feedback for chat {feedback.chat_id}"
+                    )
+
+            except Exception as e:
+                print(f"Error updating chat history feedback: {e}")
+                # Continue with legacy feedback system even if chat history fails
+
+        # Continue with legacy feedback system for backward compatibility
         collection = get_feedback_collection()
 
         # Prepare feedback document
@@ -85,6 +131,8 @@ async def save_feedback(feedback: FeedbackData):
             "session_id": feedback.session_id,
             "user_id": feedback.user_id,
             "message_id": feedback.message_id,
+            "chat_id": feedback.chat_id,
+            "message_index": feedback.message_index,
             "timestamp": datetime.utcnow(),
             "created_at": datetime.utcnow().isoformat(),
         }
@@ -93,6 +141,12 @@ async def save_feedback(feedback: FeedbackData):
         if feedback.message_id:
             # Use message_id for deduplication (preferred method)
             query = {"message_id": feedback.message_id}
+        elif feedback.chat_id and feedback.message_index is not None:
+            # Use chat_id and message_index for deduplication
+            query = {
+                "chat_id": feedback.chat_id,
+                "message_index": feedback.message_index,
+            }
         else:
             # Fallback to question+answer hash for deduplication
             import hashlib
