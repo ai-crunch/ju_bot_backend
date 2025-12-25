@@ -1,30 +1,41 @@
 import os
+import uuid
 import fitz
 import json
 from typing import Any, List, Dict
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import PointStruct
+from qdrant_client.http.models import PointStruct, Record
 from qdrant_client.models import VectorParams, Distance
+from agno.tools import tool
 
 from utils.embedder import Embedder
 from utils.splitter import TextSplitter
+from utils.logger import get_logger
 
 import config
+
+logger = get_logger(__name__)
 
 
 class QdrantVDB:
     def __init__(
         self,
-        host: str = "localhost",
-        port: int = 6333,
-        collection_name: str = config.QDRANT["collection_name"],
+        host: str = None,
+        port: int = None,
+        collection_name: str = None,
     ):
-        print(
+        host = host or config.QDRANT["host"]
+        port = port or config.QDRANT["port"]
+        collection_name = collection_name or config.QDRANT["collection_name"]
+
+        logger.info(
             f"Initializing QdrantVDB with host={host}, port={port}, collection_name={collection_name}"
         )
         self.client = QdrantClient(host=host, port=port)
         self.embedder = Embedder()
-        self.splitter = TextSplitter(chunk_size=250, overlap=50)
+        self.splitter = TextSplitter(
+            chunk_size=config.CHUNK_SIZE, overlap=config.CHUNK_OVERLAP
+        )
         self.collection_name = collection_name
         if not self.collection_exists(collection_name):
             self.create_collection()
@@ -46,9 +57,94 @@ class QdrantVDB:
         self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=VectorParams(
-                size=Embedder.OUTPUT_SIZE, distance=Distance.COSINE
+                size=self.embedder.OUTPUT_SIZE, distance=Distance.COSINE
             ),
         )
+
+    def upsert_web_source(
+        self,
+        chunks: List[Dict],
+        source_link: str,
+        source_title: str,
+    ):
+        """
+        Upsert web source data into the collection.
+
+        Args:
+            chunks: List of chunk dictionaries with 'content', 'title', 'metadata'
+            source_link: URL source of the content
+            source_title: Title for the source (used in frontend)
+        """
+        logger.info(f"Upserting web source data into collection {self.collection_name}")
+        chunks_text = [chunk["content"] for chunk in chunks]
+        embeddings = self.embedder.embed(chunks_text)
+        points = []
+
+        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            metadata = {
+                **(chunk.get("metadata", {})),
+                "source_link": source_link,
+                "source_title": source_title,
+                "chunk_title": chunk.get(
+                    "title", f"Chunk {chunk.get('chunk_id', idx + 1)}"
+                ),
+                "is_web_source": True,
+            }
+
+            point = PointStruct(
+                id=chunk.get("chunk_id", idx),
+                vector=embedding,
+                payload={
+                    "text": chunk["content"],
+                    "file_path": source_link,
+                    "metadata": metadata,
+                },
+            )
+
+            points.append(point)
+
+        logger.info(
+            f"Upserting {len(points)} points into collection {self.collection_name} with source {source_link} and title {source_title}"
+        )
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+        )
+        return points
+
+    def upsert_extracted_ocr(self, chunks: List[str], file_metadata: Dict):
+        embeddings = self.embedder.embed(chunks)
+        points = []
+
+        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            metadata = {
+                **file_metadata,
+                "chunk_index": idx,
+                "total_chunks": len(chunks),
+                "word_count": len(chunk.split()),
+            }
+
+            unique_id = abs(
+                hash(
+                    f"{file_metadata.get('path', '')}_page_{file_metadata.get('page_number', 0)}_chunk_{idx}"
+                )
+            ) % (2**31)
+            point = PointStruct(
+                id=unique_id,
+                vector=embedding,
+                payload={
+                    "text": chunk,
+                    "file_path": file_metadata.get("path", ""),
+                    "metadata": metadata,
+                },
+            )
+            points.append(point)
+
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+        )
+        return points
 
     def embed_file(self, file_path: str, metadata: Any = None):
         text = self._read_pdf(file_path)
@@ -181,12 +277,36 @@ class QdrantVDB:
         )
         return points
 
-    def retrieve(self, question: str):
-        embedding = self.embedder.embed(question)
+    def retrieve(self, query: str, limit: int = None) -> List[Record]:
+        """
+        Retrieve sources from the collection based on the query.
+
+        Args:
+            query: The query to search for
+            limit: The maximum number of results to return
+        """
+        if limit is None:
+            limit = config.RETRIEVED_CHUNKS
+
+        embedding = self.embedder.embed(query)
+
+        # embedder.embed returns a list of embeddings [[]].
+        # For search, we need a single embedding [].
+        if embedding and isinstance(embedding, list) and isinstance(embedding[0], list):
+            embedding = embedding[0]
+
         results = self.client.search(
             collection_name=self.collection_name,
             query_vector=embedding,
-            limit=5,
+            limit=limit,
+            with_payload=True,
+        )
+        return results
+
+    def get_sources(self, sources_ids: List[int]) -> List[Record]:
+        results = self.client.retrieve(
+            collection_name=self.collection_name,
+            ids=sources_ids,
             with_payload=True,
         )
         return results

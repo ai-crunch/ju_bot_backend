@@ -1,0 +1,104 @@
+"""
+This class is used to generate the vector database for the Ju Bot.
+It indexes the scraped web content and the OCR results.
+"""
+
+import os
+import json
+from typing import List
+
+from utils.vdb import QdrantVDB
+from utils.logger import get_logger
+from models.scraped_web import ScrapedWebFiles
+from utils.splitter import TextSplitter
+
+logger = get_logger(__name__)
+
+
+class Generator:
+    """
+    This class is used to generate the vector database for the Ju Bot.
+    It indexes the scraped web content and the OCR results.
+    """
+
+    def __init__(
+        self,
+        qdrant_vdb: QdrantVDB,
+        splitter: TextSplitter,
+    ):
+        logger.info("Initializing the generator...")
+        self.qdrant = qdrant_vdb
+        self.splitter = splitter
+
+    def _open_json_file(self, file_path: str):
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def index_web_content(self, web_content: List[ScrapedWebFiles]):
+        """
+        Index the web content into the vector database.
+
+        Args:
+            web_content: A list of ScrapedWebFiles objects.
+        """
+        logger.info("Indexing the web content...")
+        for content in web_content:
+            file_path = content.file_path
+            source_link = content.source_link
+            source_title = content.source_title
+            chunks = self._open_json_file(file_path)
+            self.qdrant.upsert_web_source(chunks, source_link, source_title)
+        logger.info("Web content indexed successfully")
+
+    def index_ocr_results(self, data_path: str, ocr_results_dir: str):
+        """
+        Index the OCR results into the vector database.
+
+        Args:
+            data_path: The path to the data directory.
+            ocr_results_dir: The path to the OCR results directory.
+        """
+        logger.info("Indexing the OCR results...")
+        if not os.path.exists(ocr_results_dir):
+            logger.error(f"OCR results directory not found at: {ocr_results_dir}")
+            return
+
+        ocr_files = [
+            os.path.join(ocr_results_dir, file)
+            for file in os.listdir(ocr_results_dir)
+            if file.endswith(".json")
+        ]
+        logger.info(f"Found {len(ocr_files)} OCR result files")
+
+        for file_path in ocr_files:
+            json_file = self._open_json_file(file_path)
+            original_pdf_path = json_file.get("metadata", {}).get("file_path", "")
+            if not original_pdf_path:
+                logger.error(f"No PDF found in OCR metadata for: {file_path}")
+                continue
+
+            # Ensure we don't double the data/ prefix
+            if original_pdf_path.startswith(data_path + os.sep) or original_pdf_path.startswith(data_path + "/"):
+                file_path = original_pdf_path
+            else:
+                file_path = os.path.join(data_path, original_pdf_path)
+            
+            file_name = os.path.basename(file_path)
+            source_title = file_name.replace(".pdf", "")
+            metadata = json_file.get("metadata", {})
+            file_metadata = {
+                "filename": file_name,
+                "path": file_path,
+                "source_title": source_title,
+                "is_web_source": False,
+                "page_number": metadata.get("page_number", 0),
+                "timestamp": metadata.get("timestamp", ""),
+                "model": metadata.get("model", ""),
+                "is_web_source": False,
+            }
+
+            text = json_file.get("text", "")
+            chunks = self.splitter.split(text)
+            self.qdrant.upsert_extracted_ocr(chunks, file_metadata)
+
+        logger.info("OCR results indexed successfully")
