@@ -4,8 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from routers.chat import router as chat_router
-
-# from routers.agent import router as agent_router
 from routers.feedback import router as feedback_router
 from routers.chat_history import router as chat_history_router
 from routers.v2.agent import router as agent_router
@@ -62,7 +60,6 @@ app.include_router(admin_config_router)
 app.include_router(admin_knowledge_router)
 app.include_router(admin_users_router)
 app.include_router(admin_analytics_router)
-# app.include_router(agent_router)
 app.include_router(feedback_router)
 app.include_router(chat_history_router)
 
