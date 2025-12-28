@@ -12,6 +12,8 @@ services:
       - 6335
     volumes:
       - qdrant_ju_bot_data:/qdrant/storage
+    networks:
+      - ju_bot_network
 
   mongodb:
     image: mongo:7.0
@@ -27,7 +29,12 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password}
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-ju_bot_feedback}
+    networks:
+      - ju_bot_network
 
 volumes:
   qdrant_ju_bot_data:
   mongodb_ju_bot_data:
+
+networks:
+  ju_bot_network:
