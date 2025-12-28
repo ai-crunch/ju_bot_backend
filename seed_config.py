@@ -48,7 +48,7 @@ def seed_system_config():
             "vector_db": {
                 "host": os.getenv("QDRANT_HOST", "localhost"),
                 "port": int(os.getenv("QDRANT_PORT", 6333)),
-                "collection_name": "ju_bot_vdb_with_ocr_test_generator",
+                "collection_name": os.getenv("QDRANT_COLLECTION_NAME", "ju_bot_vdb"),
             },
             "system_flags": {
                 "maintenance_mode": False,
