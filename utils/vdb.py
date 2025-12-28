@@ -5,7 +5,13 @@ import json
 from typing import Any, List, Dict
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import PointStruct, Record
-from qdrant_client.models import VectorParams, Distance
+from qdrant_client.models import (
+    VectorParams,
+    Distance,
+    Filter,
+    FieldCondition,
+    MatchValue,
+)
 from agno.tools import tool
 
 from utils.embedder import Embedder
@@ -18,12 +24,23 @@ logger = get_logger(__name__)
 
 
 class QdrantVDB:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(QdrantVDB, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
     def __init__(
         self,
         host: str = None,
         port: int = None,
         collection_name: str = None,
     ):
+        if self._initialized:
+            return
+
         host = host or config.QDRANT["host"]
         port = port or config.QDRANT["port"]
         collection_name = collection_name or config.QDRANT["collection_name"]
@@ -39,6 +56,8 @@ class QdrantVDB:
         self.collection_name = collection_name
         if not self.collection_exists(collection_name):
             self.create_collection()
+
+        self._initialized = True
 
     def _read_pdf(self, pdf_path):
         text = ""
@@ -89,6 +108,7 @@ class QdrantVDB:
                     "title", f"Chunk {chunk.get('chunk_id', idx + 1)}"
                 ),
                 "is_web_source": True,
+                "is_active": True,
             }
 
             point = PointStruct(
@@ -122,6 +142,7 @@ class QdrantVDB:
                 "chunk_index": idx,
                 "total_chunks": len(chunks),
                 "word_count": len(chunk.split()),
+                "is_active": True,
             }
 
             unique_id = abs(
@@ -150,11 +171,21 @@ class QdrantVDB:
         text = self._read_pdf(file_path)
         chunks = self.splitter.split(text)
         embeddings = self.embedder.embed(chunks)
+
+        # Ensure metadata is a dict and add is_active
+        enhanced_metadata = metadata if isinstance(metadata, dict) else {}
+        enhanced_metadata["is_active"] = True
+
         points = [
             PointStruct(
                 id=idx,
                 vector=embedding,
-                payload={"text": chunk, "file_path": file_path, "metadata": metadata},
+                payload={
+                    "text": chunk,
+                    "file_path": file_path,
+                    "metadata": enhanced_metadata,
+                    "is_active": True,
+                },
             )
             for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
         ]
@@ -189,6 +220,7 @@ class QdrantVDB:
                     "title", f"Chunk {chunk.get('chunk_id', idx + 1)}"
                 ),
                 "is_web_source": True,
+                "is_active": True,
             }
 
             points.append(
@@ -199,6 +231,7 @@ class QdrantVDB:
                         "text": chunk["content"],
                         "file_path": source_link,  # Use source link as file_path for compatibility
                         "metadata": enhanced_metadata,
+                        "is_active": True,
                     },
                 )
             )
@@ -249,6 +282,7 @@ class QdrantVDB:
                 "total_chunks": len(chunks),
                 "word_count": len(chunk.split()),
                 "is_web_source": False,
+                "is_active": True,
             }
 
             # Generate unique ID based on file path and page number and chunk index
@@ -267,6 +301,7 @@ class QdrantVDB:
                         "text": chunk,
                         "file_path": ocr_metadata.get("file_path", ""),
                         "metadata": enhanced_metadata,
+                        "is_active": True,
                     },
                 )
             )
@@ -295,12 +330,24 @@ class QdrantVDB:
         if embedding and isinstance(embedding, list) and isinstance(embedding[0], list):
             embedding = embedding[0]
 
-        results = self.client.search(
+        # Filter out points that are explicitly marked as inactive
+        # Using must_not with is_active: False ensures we include points where is_active is True or missing
+        query_filter = Filter(
+            must_not=[
+                FieldCondition(
+                    key="is_active",
+                    match=MatchValue(value=False),
+                )
+            ]
+        )
+
+        results = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=embedding,
+            query=embedding,
             limit=limit,
             with_payload=True,
-        )
+            query_filter=query_filter,
+        ).points
         return results
 
     def get_sources(self, sources_ids: List[int]) -> List[Record]:
@@ -310,3 +357,22 @@ class QdrantVDB:
             with_payload=True,
         )
         return results
+
+    def toggle_source_status(self, file_path: str, is_active: bool):
+        """
+        Toggle the is_active status for all points associated with a file_path.
+        """
+        logger.info(f"Toggling status for {file_path} to is_active={is_active}")
+        self.client.set_payload(
+            collection_name=self.collection_name,
+            payload={"is_active": is_active},
+            points=Filter(
+                must=[
+                    FieldCondition(
+                        key="file_path",
+                        match=MatchValue(value=file_path),
+                    )
+                ]
+            ),
+        )
+        return True
