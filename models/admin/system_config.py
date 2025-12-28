@@ -40,9 +40,17 @@ class LLMProvider(str, Enum):
 
 
 class LLMModel(str, Enum):
-    GPT_4_1 = "gpt-4.1"
+    GPT_4O = "gpt-4o"
     GPT_4O_MINI = "gpt-4o-mini"
+    # GPT_4_TURBO = "gpt-4-turbo"
+    # GPT_4 = "gpt-4"
     GPT_3_5_TURBO = "gpt-3.5-turbo"
+    O1_MINI = "o1-mini"
+    # O1_PREVIEW = "o1-preview"
+    GPT_5_2 = "gpt-5.2"
+    GPT_5 = "gpt-5"
+    GPT_5_MINI = "gpt-5-mini"
+    GPT_5_1 = "gpt-5.1"
 
 
 class EmbeddingConfig(BaseModel):
@@ -82,9 +90,17 @@ class LLMConfig(BaseModel):
     def get_provider_options(cls) -> Dict[str, List[str]]:
         return {
             LLMProvider.OPENAI: [
-                LLMModel.GPT_4_1,
+                LLMModel.GPT_4O,
                 LLMModel.GPT_4O_MINI,
-                LLMModel.GPT_3_5_TURBO,
+                # LLMModel.GPT_4_TURBO,
+                # LLMModel.GPT_4,
+                # LLMModel.GPT_3_5_TURBO,
+                # LLMModel.O1_MINI,
+                # LLMModel.O1_PREVIEW,
+                LLMModel.GPT_5_2,
+                # LLMModel.GPT_5,
+                # LLMModel.GPT_5_MINI,
+                LLMModel.GPT_5_1,
             ],
         }
 
@@ -98,7 +114,7 @@ class VectorDBConfig(BaseModel):
 class SystemFlags(BaseModel):
     maintenance_mode: bool = False
     debug: bool = False
-    enable_ocr: bool = True
+    enable_ocr: bool = False
     enable_reasoning: bool = False
 
 
