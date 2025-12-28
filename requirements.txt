@@ -12,3 +12,4 @@ pymongo
 passlib==1.7.4
 bcrypt==5.0.0
 pydantic[email]
+pillow
