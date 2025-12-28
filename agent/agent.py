@@ -75,8 +75,8 @@ class JUAgent:
             )
 
         # Apply reasoning instructions if enabled in system config
-        if config.ENABLE_REASONING:
-            instructions += "\n\nREASONING ENABLED: Please provide a detailed step-by-step reasoning for your answer before providing the final response."
+        # if config.ENABLE_REASONING:
+        #     instructions += "\n\nREASONING ENABLED: Please provide a detailed step-by-step reasoning for your answer before providing the final response."
 
         self.agent = Agent(
             # Agent General Settings
@@ -84,6 +84,7 @@ class JUAgent:
             session_id=chat_id,
             model=model,
             name=name,
+            reasoning=config.ENABLE_REASONING,
             # Agent description and instructions
             description=description,
             instructions=instructions,
