@@ -58,8 +58,8 @@ if __name__ == "__main__":
         sys.exit(1)
     
     # Give services a moment to fully initialize
-    print("Services are ready. Waiting 2 seconds for full initialization...")
-    time.sleep(2)
+    print("Services are ready. Waiting 5 seconds for full initialization...")
+    time.sleep(5)
     
     print("All services are ready!")
     sys.exit(0)

@@ -48,7 +48,27 @@ class QdrantVDB:
         logger.info(
             f"Initializing QdrantVDB with host={host}, port={port}, collection_name={collection_name}"
         )
-        self.client = QdrantClient(host=host, port=port)
+        
+        # Retry logic for Qdrant connection
+        import time
+        max_retries = 10
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                self.client = QdrantClient(host=host, port=port)
+                # Test connection by checking if we can get collections
+                _ = self.client.get_collections()
+                logger.info(f"Successfully connected to Qdrant on attempt {attempt + 1}")
+                break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Failed to connect to Qdrant (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"Failed to connect to Qdrant after {max_retries} attempts: {e}")
+                    raise
+        
         self.embedder = Embedder()
         self.splitter = TextSplitter(
             chunk_size=config.CHUNK_SIZE, overlap=config.CHUNK_OVERLAP
