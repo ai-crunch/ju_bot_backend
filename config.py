@@ -12,7 +12,7 @@ LOGGER = {
 
 MONGODB = {
     "host": os.getenv("MONGO_HOST", "localhost"),
-    "port": int(os.getenv("MONGO_PORT", 27077)),
+    "port": int(os.getenv("MONGO_PORT", 27017)),  # Default to standard MongoDB port
     "username": os.getenv("MONGO_ROOT_USERNAME", "admin"),
     "password": os.getenv("MONGO_ROOT_PASSWORD", "password"),
     "database": os.getenv("MONGO_DATABASE", "ju_bot_feedback"),
@@ -53,10 +53,11 @@ def reload_config():
 
     if _config:
         # Legacy Structure Mapping (for backward compatibility)
+        # Prioritize environment variables for host/port (needed for Docker service names)
         QDRANT = {
-            "host": _config.vector_db.host,
-            "port": _config.vector_db.port,
-            "collection_name": _config.vector_db.collection_name,
+            "host": os.getenv("QDRANT_HOST", _config.vector_db.host),
+            "port": int(os.getenv("QDRANT_PORT", str(_config.vector_db.port))),
+            "collection_name": os.getenv("QDRANT_COLLECTION_NAME", _config.vector_db.collection_name),
         }
 
         # Ensure Enum values are converted to raw strings/values
@@ -98,7 +99,7 @@ def reload_config():
         QDRANT = {
             "host": os.getenv("QDRANT_HOST", "localhost"),
             "port": int(os.getenv("QDRANT_PORT", 6333)),
-            "collection_name": "ju_bot_vdb_with_ocr_test_generator",
+            "collection_name": os.getenv("QDRANT_COLLECTION_NAME", "ju_bot_vdb_with_ocr_test_generator"),
         }
         EMBEDDER = {
             "provider": "huggingface",
