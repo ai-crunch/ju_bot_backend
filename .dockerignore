@@ -1,0 +1,60 @@
+# Files and directories to ignore when building the Docker image
+
+# Terraform Folder
+terraform
+
+# Python bytecode files
+*.pyc
+__pycache__/
+
+# IDE and editor-specific files
+.vscode/
+.idea/
+*.sublime-workspace
+*.swp
+
+# Git related files
+.git/
+.gitignore
+
+# Docker-related files
+docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+
+# environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Database files
+*.sqlite3
+data/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+
+# Test and development files
+**/tests/
+conftest.py
+pytest.ini
+*.pyo
+*.pyd
+*.pyc
+*.pyo
+*.pyc
+*.pyo
+*.egg-info/
+*.egg
+
+# README file
+README.md
