@@ -1,3 +1,5 @@
+import os
+
 import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,12 +20,26 @@ from routers.v2.admin.analytics import router as admin_analytics_router
 import config
 
 
+_CORS_ORIGINS_RAW = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+CORS_ALLOWED_ORIGINS = (
+    [o.strip() for o in _CORS_ORIGINS_RAW.split(",") if o.strip()]
+    if _CORS_ORIGINS_RAW
+    else ["*"]
+)
+_ALLOW_CREDENTIALS = CORS_ALLOWED_ORIGINS != ["*"]
+
+
 class CORSHeaderMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
 
-        # Add CORS headers to all responses, including file responses
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        origin = request.headers.get("origin")
+        if CORS_ALLOWED_ORIGINS == ["*"]:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+        elif origin and origin in CORS_ALLOWED_ORIGINS:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
+
         response.headers["Access-Control-Allow-Methods"] = (
             "GET, POST, PUT, DELETE, OPTIONS, HEAD"
         )
@@ -41,8 +57,8 @@ app = FastAPI()
 # Add standard CORS middleware first
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
-    allow_credentials=False,  # Set to False when using allow_origins=["*"]
+    allow_origins=CORS_ALLOWED_ORIGINS,
+    allow_credentials=_ALLOW_CREDENTIALS,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
     expose_headers=["*"],

@@ -36,9 +36,11 @@ venv.bak/
 # Database files
 *.sqlite3
 data/
+ocr_results/
 
 # Log files
 *.log
+logs/
 
 # Temporary files
 *.tmp
