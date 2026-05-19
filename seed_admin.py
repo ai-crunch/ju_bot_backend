@@ -33,6 +33,7 @@ def seed_admin(username="admin", email="admin@ju.edu.jo", password="admin"):
             username=username,
             email=email,
             hashed_password=hashed_password,
+            role="admin",
             is_admin=True,
             created_at=datetime.utcnow(),
         )

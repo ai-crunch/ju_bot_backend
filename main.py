@@ -16,6 +16,8 @@ from routers.v2.admin.config import router as admin_config_router
 from routers.v2.admin.knowledge import router as admin_knowledge_router
 from routers.v2.admin.users import router as admin_users_router
 from routers.v2.admin.analytics import router as admin_analytics_router
+from routers.v2.department.knowledge import router as department_knowledge_router
+from routers.v2.department.analytics import router as department_analytics_router
 
 import config
 
@@ -76,6 +78,8 @@ app.include_router(admin_config_router)
 app.include_router(admin_knowledge_router)
 app.include_router(admin_users_router)
 app.include_router(admin_analytics_router)
+app.include_router(department_knowledge_router)
+app.include_router(department_analytics_router)
 app.include_router(feedback_router)
 app.include_router(chat_history_router)
 

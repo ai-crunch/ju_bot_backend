@@ -23,19 +23,19 @@ def wait_for_service(host: str, port: int, timeout: int = 60, check_http: bool =
                     try:
                         url = f"http://{host}:{port}/healthz"
                         urllib.request.urlopen(url, timeout=2)
-                        print(f"✓ {host}:{port} is ready and healthy")
+                        print(f"??? {host}:{port} is ready and healthy")
                         return True
                     except (urllib.error.URLError, Exception):
                         # Port is open but service not ready yet
                         pass
                 else:
-                    print(f"✓ {host}:{port} is ready")
+                    print(f"??? {host}:{port} is ready")
                     return True
         except Exception as e:
             pass
         print(f"Waiting for {host}:{port} to be ready...")
         time.sleep(1)
-    print(f"✗ {host}:{port} did not become ready within {timeout} seconds")
+    print(f"??? {host}:{port} did not become ready within {timeout} seconds")
     return False
 
 if __name__ == "__main__":

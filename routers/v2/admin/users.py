@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from models.user import UserDB
 from models.database import MongoDB
 from routers.v2.admin.dependencies import get_current_admin
 from utils.logger import get_logger
+from typing import Literal, Optional
 
 logger = get_logger(__name__)
 
@@ -71,11 +73,18 @@ async def get_users_analytics(user: dict = Depends(get_current_admin)):
             total_feedback = thumbs_up + thumbs_down
             ratio = (thumbs_up / total_feedback * 100) if total_feedback > 0 else 0
             
+            role = u.get("role", "user")
+            if u.get("is_admin") and role != "admin":
+                role = "admin"
+
             analytics.append({
                 "user_id": uid,
                 "username": u["username"],
                 "email": u["email"],
                 "is_admin": u.get("is_admin", False),
+                "role": role,
+                "department_id": u.get("department_id"),
+                "department_name": u.get("department_name"),
                 "total_chats": chat_map.get(uid, 0),
                 "total_messages": total_messages,
                 "thumbs_up_ratio": round(ratio, 1)
@@ -107,4 +116,46 @@ async def toggle_user_admin(target_user_id: str, current_admin: dict = Depends(g
     return {
         "message": f"User admin status toggled to {updated_user['is_admin']}",
         "is_admin": updated_user["is_admin"]
+    }
+
+
+class SetRoleRequest(BaseModel):
+    role: Literal["user", "department_editor", "admin"]
+    department_id: Optional[str] = None
+    department_name: Optional[str] = None
+
+
+@router.put("/{target_user_id}/set-role")
+async def set_user_role(
+    target_user_id: str,
+    request: SetRoleRequest,
+    current_admin: dict = Depends(get_current_admin),
+):
+    if target_user_id == current_admin["user_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot change your own role. Ask another admin."
+        )
+
+    success = user_db.set_user_role(
+        target_user_id,
+        role=request.role,
+        department_id=request.department_id,
+        department_name=request.department_name,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found or role update failed"
+        )
+
+    updated_user = user_db.get_user_by_id(target_user_id)
+    return {
+        "message": f"User role updated to {updated_user['role']}",
+        "user_id": updated_user["user_id"],
+        "username": updated_user["username"],
+        "role": updated_user["role"],
+        "is_admin": updated_user.get("is_admin", False),
+        "department_id": updated_user.get("department_id"),
+        "department_name": updated_user.get("department_name"),
     }

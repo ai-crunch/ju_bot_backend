@@ -22,6 +22,9 @@ class AuthResponse(BaseModel):
     user_id: str
     username: str
     is_admin: bool
+    role: str = "user"
+    department_id: Optional[str] = None
+    department_name: Optional[str] = None
 
 
 @router.post("/signup", response_model=AuthResponse)
@@ -43,12 +46,20 @@ async def signup(request: SignupRequest):
         username=request.username,
         email=request.email,
         hashed_password=hashed_password,
-        is_admin=False,  # Default to non-admin
+        role="user",
+        is_admin=False,
     )
 
     user_id = user_db.create_user(user)
 
-    return AuthResponse(user_id=user_id, username=user.username, is_admin=user.is_admin)
+    return AuthResponse(
+        user_id=user_id,
+        username=user.username,
+        is_admin=user.is_admin,
+        role=user.role,
+        department_id=user.department_id,
+        department_name=user.department_name,
+    )
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -69,8 +80,15 @@ async def login(request: LoginRequest):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
 
+    role = user_data.get("role", "user")
+    if user_data.get("is_admin") and role != "admin":
+        role = "admin"
+
     return AuthResponse(
         user_id=user_data["user_id"],
         username=user_data["username"],
         is_admin=user_data.get("is_admin", False),
+        role=role,
+        department_id=user_data.get("department_id"),
+        department_name=user_data.get("department_name"),
     )

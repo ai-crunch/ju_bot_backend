@@ -19,7 +19,7 @@ async def get_current_admin(user_id: str):
         )
     
     user = user_db.get_user_by_id(user_id)
-    if not user or not user.get("is_admin"):
+    if not user or (not user.get("is_admin") and user.get("role") != "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",

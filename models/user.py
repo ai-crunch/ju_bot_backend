@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, List
+from typing import Literal, Optional, List
 import uuid
 from .database import MongoDB
 import bcrypt
@@ -11,8 +11,17 @@ class User(BaseModel):
     username: str
     email: str
     hashed_password: str
+    role: Literal["user", "department_editor", "admin"] = "user"
+    department_id: Optional[str] = None
+    department_name: Optional[str] = None
     is_admin: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @property
+    def resolved_role(self) -> str:
+        if self.is_admin:
+            return "admin"
+        return self.role
 
     class Config:
         populate_by_name = True
@@ -66,7 +75,27 @@ class UserDB:
             return False
 
         new_status = not user.get("is_admin", False)
+        update = {"$set": {"is_admin": new_status}}
+        if new_status:
+            update["$set"]["role"] = "admin"
+        elif user.get("role") == "admin":
+            update["$set"]["role"] = "user"
         result = self.collection.update_one(
-            {"user_id": user_id}, {"$set": {"is_admin": new_status}}
+            {"user_id": user_id}, update
         )
+        return result.modified_count > 0
+
+    def set_user_role(self, user_id: str, role: str, department_id: Optional[str] = None, department_name: Optional[str] = None) -> bool:
+        update = {
+            "$set": {
+                "role": role,
+                "is_admin": role == "admin",
+            }
+        }
+        if department_id is not None:
+            update["$set"]["department_id"] = department_id
+        if department_name is not None:
+            update["$set"]["department_name"] = department_name
+
+        result = self.collection.update_one({"user_id": user_id}, update)
         return result.modified_count > 0
