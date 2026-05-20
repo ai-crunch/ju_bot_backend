@@ -217,7 +217,10 @@ async def get_qdrant_dashboard(user: dict = Depends(get_current_admin)):
     Returns the URL for the Qdrant management dashboard.
     Requires administrative privileges.
     """
-    dashboard_url = f"http://{config.QDRANT['host']}:{config.QDRANT['port']}/dashboard"
+    import os
+    dashboard_host = os.getenv("QDRANT_EXTERNAL_HOST", "localhost")
+    dashboard_port = os.getenv("QDRANT_EXTERNAL_PORT", config.QDRANT['port'])
+    dashboard_url = f"http://{dashboard_host}:{dashboard_port}/dashboard"
     return {"url": dashboard_url}
 
 

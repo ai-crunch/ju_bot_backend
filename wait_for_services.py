@@ -21,7 +21,7 @@ def wait_for_service(host: str, port: int, timeout: int = 60, check_http: bool =
                 # If HTTP check is requested, verify the service responds
                 if check_http:
                     try:
-                        url = f"http://{host}:{port}/healthz"
+                        url = f"http://{host}:{port}/readyz"
                         urllib.request.urlopen(url, timeout=2)
                         print(f"??? {host}:{port} is ready and healthy")
                         return True

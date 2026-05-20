@@ -13,6 +13,7 @@ class Embedder:
         if not cls._instance:
             cls._instance = super(Embedder, cls).__new__(cls)
             cls._instance._initialized = False
+            cls._instance._model_loaded = False
         return cls._instance
 
     def __init__(self, provider: str = None, model_name: str = None):
@@ -24,7 +25,17 @@ class Embedder:
         self.dimension = config.EMBEDDER["dimension"]
 
         logger.info(
-            f"Initializing Embedder with provider {self.provider} and model {self.model_name}"
+            f"Embedder configured with provider {self.provider} and model {self.model_name} (lazy load)"
+        )
+
+        self._initialized = True
+
+    def _load_model(self):
+        if self._model_loaded:
+            return
+
+        logger.info(
+            f"Loading Embedder model {self.provider}/{self.model_name}..."
         )
 
         if self.provider == "huggingface":
@@ -34,13 +45,17 @@ class Embedder:
         else:
             raise ValueError(f"Unsupported embedding provider: {self.provider}")
 
-        self._initialized = True
+        self._model_loaded = True
+        logger.info("Embedder model loaded successfully")
 
     @property
     def OUTPUT_SIZE(self) -> int:
+        self._load_model()
         return self.dimension
 
     def embed(self, texts: list[str]) -> list[list[float]]:
+        self._load_model()
+
         if isinstance(texts, str):
             texts = [texts]
 
