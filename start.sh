@@ -11,4 +11,13 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "All services are ready. Starting backend..."
-exec uvicorn main:app --host 0.0.0.0 --port 8000
+
+# Enable hot-reload in development by setting UVICORN_RELOAD=true.
+# Requires the source bind mount (.:/app) so edits are visible inside the container.
+RELOAD_FLAG=""
+if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
+    echo "Hot-reload enabled (UVICORN_RELOAD=true)."
+    RELOAD_FLAG="--reload"
+fi
+
+exec uvicorn main:app --host 0.0.0.0 --port 8000 ${RELOAD_FLAG}

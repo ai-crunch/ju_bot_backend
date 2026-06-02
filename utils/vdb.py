@@ -8,6 +8,7 @@ from qdrant_client.http.models import PointStruct, Record
 from qdrant_client.models import (
     VectorParams,
     Distance,
+    SparseVector,
     SparseVectorParams,
     SparseIndexParams,
     Filter,
@@ -102,6 +103,29 @@ class QdrantVDB:
         sparse = SparseEmbedder().embed(chunks_text)
         return dense, sparse
 
+    @staticmethod
+    def _dense_to_list(vec: Any) -> Any:
+        return vec.tolist() if hasattr(vec, "tolist") else vec
+
+    @staticmethod
+    def _sparse_to_qdrant(vec: Any) -> Any:
+        """
+        fastembed returns SparseEmbedding objects; Qdrant expects SparseVector.
+        Accept dicts as well to keep call-sites flexible.
+        """
+        if isinstance(vec, SparseVector):
+            return vec
+        if isinstance(vec, dict) and "indices" in vec and "values" in vec:
+            return SparseVector(
+                indices=list(vec["indices"]),
+                values=list(vec["values"]),
+            )
+        if hasattr(vec, "indices") and hasattr(vec, "values"):
+            indices = vec.indices.tolist() if hasattr(vec.indices, "tolist") else list(vec.indices)
+            values = vec.values.tolist() if hasattr(vec.values, "tolist") else list(vec.values)
+            return SparseVector(indices=indices, values=values)
+        return vec
+
     def create_collection(self):
         self.client.create_collection(
             collection_name=self.collection_name,
@@ -144,8 +168,8 @@ class QdrantVDB:
             point = PointStruct(
                 id=chunk.get("chunk_id", idx),
                 vector={
-                    "": embedding,
-                    "sparse": sparse,
+                    "": self._dense_to_list(embedding),
+                    "sparse": self._sparse_to_qdrant(sparse),
                 },
                 payload={
                     "text": chunk["content"],
@@ -186,8 +210,8 @@ class QdrantVDB:
             point = PointStruct(
                 id=unique_id,
                 vector={
-                    "": embedding,
-                    "sparse": sparse,
+                    "": self._dense_to_list(embedding),
+                    "sparse": self._sparse_to_qdrant(sparse),
                 },
                 payload={
                     "text": chunk,
@@ -215,8 +239,8 @@ class QdrantVDB:
             PointStruct(
                 id=idx,
                 vector={
-                    "": embedding,
-                    "sparse": sparse,
+                    "": self._dense_to_list(embedding),
+                    "sparse": self._sparse_to_qdrant(sparse),
                 },
                 payload={
                     "text": chunk,
@@ -259,8 +283,8 @@ class QdrantVDB:
                 PointStruct(
                     id=chunk.get("chunk_id", idx),
                     vector={
-                        "": embedding,
-                        "sparse": sparse,
+                        "": self._dense_to_list(embedding),
+                        "sparse": self._sparse_to_qdrant(sparse),
                     },
                     payload={
                         "text": chunk["content"],
@@ -321,8 +345,8 @@ class QdrantVDB:
                 PointStruct(
                     id=unique_id,
                     vector={
-                        "": embedding,
-                        "sparse": sparse,
+                        "": self._dense_to_list(embedding),
+                        "sparse": self._sparse_to_qdrant(sparse),
                     },
                     payload={
                         "text": chunk,
@@ -368,8 +392,8 @@ class QdrantVDB:
             point = PointStruct(
                 id=chunk.get("chunk_id", idx),
                 vector={
-                    "": embedding,
-                    "sparse": sparse,
+                    "": self._dense_to_list(embedding),
+                    "sparse": self._sparse_to_qdrant(sparse),
                 },
                 payload={
                     "text": chunk["content"],
@@ -419,8 +443,8 @@ class QdrantVDB:
             point = PointStruct(
                 id=unique_id,
                 vector={
-                    "": embedding,
-                    "sparse": sparse,
+                    "": self._dense_to_list(embedding),
+                    "sparse": self._sparse_to_qdrant(sparse),
                 },
                 payload={
                     "text": chunk["content"],
@@ -445,6 +469,7 @@ class QdrantVDB:
             dense_vec = dense_vec[0]
 
         sparse_vec = SparseEmbedder().embed(query)[0]
+        sparse_vec = self._sparse_to_qdrant(sparse_vec)
 
         query_filter = Filter(
             must_not=[
