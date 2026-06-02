@@ -4,7 +4,7 @@ fastapi
 pydantic
 openai
 python-dotenv
-qdrant-client[fastembed]
+qdrant-client
 PyMuPDF
 sentence-transformers
 agno
@@ -16,4 +16,5 @@ pillow
 slowapi
 pyotp
 qrcode[pil]
-FlagEmbedding
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch

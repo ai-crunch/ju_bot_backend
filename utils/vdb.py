@@ -8,13 +8,18 @@ from qdrant_client.http.models import PointStruct, Record
 from qdrant_client.models import (
     VectorParams,
     Distance,
+    SparseVectorParams,
+    SparseIndexParams,
     Filter,
     FieldCondition,
     MatchValue,
+    Prefetch,
+    FusionQuery,
+    Fusion,
 )
 from agno.tools import tool
 
-from utils.embedder import Embedder
+from utils.embedder import Embedder, SparseEmbedder
 from utils.splitter import TextSplitter
 from utils.logger import get_logger
 
@@ -92,12 +97,22 @@ class QdrantVDB:
     def collection_exists(self, collection_name: str) -> bool:
         return self.client.collection_exists(collection_name)
 
+    def _embed_both(self, chunks_text):
+        dense = self.embedder.embed(chunks_text)
+        sparse = SparseEmbedder().embed(chunks_text)
+        return dense, sparse
+
     def create_collection(self):
         self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=VectorParams(
                 size=self.embedder.OUTPUT_SIZE, distance=Distance.COSINE
             ),
+            sparse_vectors_config={
+                "sparse": SparseVectorParams(
+                    index=SparseIndexParams(on_disk=True)
+                )
+            },
         )
 
     def upsert_web_source(
@@ -108,18 +123,13 @@ class QdrantVDB:
     ):
         """
         Upsert web source data into the collection.
-
-        Args:
-            chunks: List of chunk dictionaries with 'content', 'title', 'metadata'
-            source_link: URL source of the content
-            source_title: Title for the source (used in frontend)
         """
         logger.info(f"Upserting web source data into collection {self.collection_name}")
         chunks_text = [chunk["content"] for chunk in chunks]
-        embeddings = self.embedder.embed(chunks_text)
+        embeddings, sparse_embeddings = self._embed_both(chunks_text)
         points = []
 
-        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+        for idx, (chunk, embedding, sparse) in enumerate(zip(chunks, embeddings, sparse_embeddings)):
             metadata = {
                 **(chunk.get("metadata", {})),
                 "source_link": source_link,
@@ -133,7 +143,10 @@ class QdrantVDB:
 
             point = PointStruct(
                 id=chunk.get("chunk_id", idx),
-                vector=embedding,
+                vector={
+                    "": embedding,
+                    "sparse": sparse,
+                },
                 payload={
                     "text": chunk["content"],
                     "file_path": source_link,
@@ -153,10 +166,10 @@ class QdrantVDB:
         return points
 
     def upsert_extracted_ocr(self, chunks: List[str], file_metadata: Dict):
-        embeddings = self.embedder.embed(chunks)
+        embeddings, sparse_embeddings = self._embed_both(chunks)
         points = []
 
-        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+        for idx, (chunk, embedding, sparse) in enumerate(zip(chunks, embeddings, sparse_embeddings)):
             metadata = {
                 **file_metadata,
                 "chunk_index": idx,
@@ -172,7 +185,10 @@ class QdrantVDB:
             ) % (2**31)
             point = PointStruct(
                 id=unique_id,
-                vector=embedding,
+                vector={
+                    "": embedding,
+                    "sparse": sparse,
+                },
                 payload={
                     "text": chunk,
                     "file_path": file_metadata.get("path", ""),
@@ -190,16 +206,18 @@ class QdrantVDB:
     def embed_file(self, file_path: str, metadata: Any = None):
         text = self._read_pdf(file_path)
         chunks = self.splitter.split(text)
-        embeddings = self.embedder.embed(chunks)
+        embeddings, sparse_embeddings = self._embed_both(chunks)
 
-        # Ensure metadata is a dict and add is_active
         enhanced_metadata = metadata if isinstance(metadata, dict) else {}
         enhanced_metadata["is_active"] = True
 
         points = [
             PointStruct(
                 id=idx,
-                vector=embedding,
+                vector={
+                    "": embedding,
+                    "sparse": sparse,
+                },
                 payload={
                     "text": chunk,
                     "file_path": file_path,
@@ -207,7 +225,7 @@ class QdrantVDB:
                     "is_active": True,
                 },
             )
-            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
+            for idx, (chunk, embedding, sparse) in enumerate(zip(chunks, embeddings, sparse_embeddings))
         ]
         self.client.upsert(
             collection_name=self.collection_name,
@@ -220,18 +238,12 @@ class QdrantVDB:
     ):
         """
         Embed pre-chunked data from JSON file.
-
-        Args:
-            json_chunks: List of chunk dictionaries with 'content', 'title', 'metadata'
-            source_link: URL source of the content
-            source_title: Title for the source (used in frontend)
         """
         chunks_text = [chunk["content"] for chunk in json_chunks]
-        embeddings = self.embedder.embed(chunks_text)
+        embeddings, sparse_embeddings = self._embed_both(chunks_text)
 
         points = []
-        for idx, (chunk, embedding) in enumerate(zip(json_chunks, embeddings)):
-            # Merge the original chunk metadata with source info
+        for idx, (chunk, embedding, sparse) in enumerate(zip(json_chunks, embeddings, sparse_embeddings)):
             enhanced_metadata = {
                 **(chunk.get("metadata", {})),
                 "source_link": source_link,
@@ -246,10 +258,13 @@ class QdrantVDB:
             points.append(
                 PointStruct(
                     id=chunk.get("chunk_id", idx),
-                    vector=embedding,
+                    vector={
+                        "": embedding,
+                        "sparse": sparse,
+                    },
                     payload={
                         "text": chunk["content"],
-                        "file_path": source_link,  # Use source link as file_path for compatibility
+                        "file_path": source_link,
                         "metadata": enhanced_metadata,
                         "is_active": True,
                     },
@@ -267,30 +282,21 @@ class QdrantVDB:
     ):
         """
         Embed OCR results with chunking based on word count threshold.
-
-        Args:
-            ocr_data: Dictionary containing OCR metadata and text
-            file_metadata: Additional metadata extracted from file path
-            chunk_threshold: Word count threshold for chunking text
         """
         text = ocr_data.get("text", "")
         ocr_metadata = ocr_data.get("metadata", {})
 
-        # Count words in the text
         word_count = len(text.split())
 
         if word_count <= chunk_threshold:
-            # Text is small enough, embed as single chunk
             chunks = [text]
         else:
-            # Text is too large, split into chunks
             chunks = self.splitter.split(text)
 
-        embeddings = self.embedder.embed(chunks)
+        embeddings, sparse_embeddings = self._embed_both(chunks)
 
         points = []
-        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            # Combine OCR metadata with file metadata
+        for idx, (chunk, embedding, sparse) in enumerate(zip(chunks, embeddings, sparse_embeddings)):
             enhanced_metadata = {
                 **file_metadata,
                 "file_name": ocr_metadata.get("file_name", ""),
@@ -305,8 +311,6 @@ class QdrantVDB:
                 "is_active": True,
             }
 
-            # Generate unique ID based on file path and page number and chunk index
-            # Use abs() to ensure positive ID and add timestamp to avoid collisions
             unique_id = abs(
                 hash(
                     f"{ocr_metadata.get('file_path', '')}_{ocr_metadata.get('page_number', 1)}_{idx}_{ocr_metadata.get('timestamp', '')}"
@@ -316,7 +320,10 @@ class QdrantVDB:
             points.append(
                 PointStruct(
                     id=unique_id,
-                    vector=embedding,
+                    vector={
+                        "": embedding,
+                        "sparse": sparse,
+                    },
                     payload={
                         "text": chunk,
                         "file_path": ocr_metadata.get("file_path", ""),
@@ -332,26 +339,113 @@ class QdrantVDB:
         )
         return points
 
-    def retrieve(self, query: str, limit: int = None) -> List[Record]:
-        """
-        Retrieve sources from the collection based on the query.
 
-        Args:
-            query: The query to search for
-            limit: The maximum number of results to return
+    def upsert_structured_chunks(
+        self,
+        structured_chunks: List[Dict[str, Any]],
+        source_link: str,
+        source_title: str,
+    ):
         """
+        Upsert semantic chunks (dicts with chunk_id, content, metadata, etc.)
+        produced by LegalSemanticSplitter.
+        """
+        chunks_text = [chunk["content"] for chunk in structured_chunks]
+        embeddings, sparse_embeddings = self._embed_both(chunks_text)
+        points = []
+
+        for idx, (chunk, embedding, sparse) in enumerate(zip(structured_chunks, embeddings, sparse_embeddings)):
+            chunk_meta = chunk.get("metadata", {})
+            enhanced_metadata = {
+                **chunk_meta,
+                "source_link": source_link,
+                "source_title": source_title,
+                "chunk_title": chunk_meta.get("source_section", f"Chunk {chunk.get('chunk_id', idx + 1)}"),
+                "is_web_source": True,
+                "is_active": True,
+            }
+
+            point = PointStruct(
+                id=chunk.get("chunk_id", idx),
+                vector={
+                    "": embedding,
+                    "sparse": sparse,
+                },
+                payload={
+                    "text": chunk["content"],
+                    "file_path": source_link,
+                    "metadata": enhanced_metadata,
+                },
+            )
+            points.append(point)
+
+        logger.info(
+            f"Upserting {len(points)} structured semantic chunks into collection {self.collection_name}"
+        )
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+        )
+        return points
+
+    def upsert_structured_ocr(
+        self,
+        structured_chunks: List[Dict[str, Any]],
+        file_metadata: Dict,
+    ):
+        """
+        Upsert semantic chunks from OCR results.
+        """
+        chunks_text = [chunk["content"] for chunk in structured_chunks]
+        embeddings, sparse_embeddings = self._embed_both(chunks_text)
+        points = []
+
+        for idx, (chunk, embedding, sparse) in enumerate(zip(structured_chunks, embeddings, sparse_embeddings)):
+            chunk_meta = chunk.get("metadata", {})
+            unique_id = abs(
+                hash(
+                    f"{file_metadata.get('path', '')}_page_{file_metadata.get('page_number', 0)}_chunk_{chunk.get('chunk_id', idx)}"
+                )
+            ) % (2**31)
+
+            enhanced_metadata = {
+                **file_metadata,
+                **chunk_meta,
+                "chunk_index": chunk.get("chunk_id", idx),
+                "total_chunks": len(structured_chunks),
+                "is_active": True,
+            }
+
+            point = PointStruct(
+                id=unique_id,
+                vector={
+                    "": embedding,
+                    "sparse": sparse,
+                },
+                payload={
+                    "text": chunk["content"],
+                    "file_path": file_metadata.get("path", ""),
+                    "metadata": enhanced_metadata,
+                },
+            )
+            points.append(point)
+
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+        )
+        return points
+
+    def retrieve(self, query: str, limit: int = None) -> List[Record]:
         if limit is None:
             limit = config.RETRIEVED_CHUNKS
 
-        embedding = self.embedder.embed(query)
+        dense_vec = self.embedder.embed(query)
+        if dense_vec and isinstance(dense_vec, list) and isinstance(dense_vec[0], list):
+            dense_vec = dense_vec[0]
 
-        # embedder.embed returns a list of embeddings [[]].
-        # For search, we need a single embedding [].
-        if embedding and isinstance(embedding, list) and isinstance(embedding[0], list):
-            embedding = embedding[0]
+        sparse_vec = SparseEmbedder().embed(query)[0]
 
-        # Filter out points that are explicitly marked as inactive
-        # Using must_not with is_active: False ensures we include points where is_active is True or missing
         query_filter = Filter(
             must_not=[
                 FieldCondition(
@@ -361,13 +455,35 @@ class QdrantVDB:
             ]
         )
 
+        hybrid_limit = config.HYBRID_TOP_K
+        prefetch_limit = max(hybrid_limit // 2, 1)
+
         results = self.client.query_points(
             collection_name=self.collection_name,
-            query=embedding,
-            limit=limit,
+            prefetch=[
+                Prefetch(query=dense_vec, using="", limit=prefetch_limit),
+                Prefetch(query=sparse_vec, using="sparse", limit=prefetch_limit),
+            ],
+            query=FusionQuery(fusion=Fusion.RRF),
+            limit=hybrid_limit,
             with_payload=True,
             query_filter=query_filter,
         ).points
+
+        rerank_top_k = config.RERANK_TOP_K
+        if config.RERANKER.get("enabled", True) and len(results) > rerank_top_k:
+            from utils.reranker import Reranker
+            reranker = Reranker()
+            docs = [{"id": r.id, "text": r.payload.get("text", "")} for r in results]
+            reranked = reranker.rerank(query, docs, top_k=rerank_top_k)
+            reranked_ids = {doc["id"] for doc, _ in reranked}
+            ordered = [r for r in results if r.id in reranked_ids]
+            id_order = {doc["id"]: i for i, (doc, _) in enumerate(reranked)}
+            ordered.sort(key=lambda r: id_order.get(r.id, 999))
+            results = ordered
+        else:
+            results = results[:rerank_top_k]
+
         return results
 
     def get_sources(self, sources_ids: List[int]) -> List[Record]:

@@ -12,7 +12,7 @@ qdrant = QdrantVDB()
     name="retrieve",
     description="Retrieve sources from the collection based on the query and return the sources",
 )
-def retrieve(query: str, limit: int = 5) -> List[Record]:
+def retrieve(query: str, limit: int = 20) -> List[Record]:
     """
     Retrieve sources from the collection based on the query and return the sources
 

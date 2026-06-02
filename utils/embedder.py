@@ -6,6 +6,37 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+class SparseEmbedder:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(SparseEmbedder, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self, model_name: str = None):
+        if self._initialized:
+            return
+        self.model_name = model_name or config.SPARSE_EMBEDDER["model_name"]
+        self._model = None
+        self._initialized = True
+
+    def _load_model(self):
+        if self._model is not None:
+            return
+        logger.info(f"Loading SparseEmbedder model {self.model_name}...")
+        from fastembed import SparseTextEmbedding
+        self._model = SparseTextEmbedding(model_name=self.model_name)
+        logger.info("SparseEmbedder model loaded successfully")
+
+    def embed(self, texts: list[str]) -> list[dict]:
+        self._load_model()
+        if isinstance(texts, str):
+            texts = [texts]
+        return list(self._model.embed(texts))
+
+
 class Embedder:
     _instance = None
 

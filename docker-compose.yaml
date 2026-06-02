@@ -38,8 +38,8 @@ services:
       dockerfile: Dockerfile
     container_name: ju_bot_backend
     restart: unless-stopped
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     environment:
       # MongoDB configuration - use service name for internal communication
       MONGO_HOST: mongodb
@@ -58,6 +58,7 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
     volumes:
+      - .:/app
       - ./data:/app/data
       - ./ocr_results:/app/ocr_results
       - ./logs:/app/logs
@@ -74,6 +75,22 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  frontend:
+    build:
+      context: ../ju_bot_frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    container_name: ju_bot_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ju_bot_network
 
 volumes:
   mongodb_data:

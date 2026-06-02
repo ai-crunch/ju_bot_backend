@@ -3,22 +3,14 @@ from models.user import UserDB
 
 user_db = UserDB()
 
-async def get_current_admin(user_id: str):
-    """
-    Dependency to verify if a user has administrative privileges.
-    
-    Responsibility:
-    - Ensure only authenticated admin users can access administrative endpoints.
-    - Throw 401 if user_id is missing.
-    - Throw 403 if user is not found or is not an admin.
-    """
-    if not user_id:
+async def get_current_admin(api_key: str):
+    if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
         )
-    
-    user = user_db.get_user_by_id(user_id)
+
+    user = user_db.get_user_by_api_key(api_key)
     if not user or (not user.get("is_admin") and user.get("role") != "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

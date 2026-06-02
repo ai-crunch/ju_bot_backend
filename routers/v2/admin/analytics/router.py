@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from models.database import MongoDB
 from routers.v2.admin.dependencies import get_current_admin
 from utils.logger import get_logger
@@ -6,11 +7,268 @@ from utils.vdb import QdrantVDB
 from datetime import datetime, timedelta
 import math
 
+import config
+from bson import ObjectId
+
 logger = get_logger(__name__)
+
+
+def _sanitize_for_json(obj):
+    """Recursively convert MongoDB types (ObjectId, datetime) to JSON-safe values."""
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
 
 router = APIRouter(prefix="/admin/analytics", tags=["admin-analytics"])
 
 vdb = QdrantVDB()
+
+
+@router.get("/cache-stats")
+async def get_cache_stats(user: dict = Depends(get_current_admin)):
+    """
+    Returns semantic cache performance metrics and configuration.
+    """
+    try:
+        db = MongoDB.get_db()
+        msgs = db["messages"]
+
+        # Overall counts
+        total_assistant = msgs.count_documents({"role": "assistant"})
+        total_cache_hits = msgs.count_documents(
+            {"role": "assistant", "cached_from_message_id": {"$exists": True, "$ne": None}}
+        )
+        total_llm_calls = total_assistant - total_cache_hits
+
+        # Recent (last 7 days)
+        since = datetime.utcnow() - timedelta(days=7)
+        recent_assistant = msgs.count_documents(
+            {"role": "assistant", "timestamp": {"$gte": since}}
+        )
+        recent_cache_hits = msgs.count_documents(
+            {
+                "role": "assistant",
+                "cached_from_message_id": {"$exists": True, "$ne": None},
+                "timestamp": {"$gte": since},
+            }
+        )
+        recent_llm_calls = recent_assistant - recent_cache_hits
+        recent_hit_rate = (
+            round(recent_cache_hits / (recent_cache_hits + recent_llm_calls) * 100, 2)
+            if (recent_cache_hits + recent_llm_calls) > 0
+            else 0.0
+        )
+
+        # Cost estimation: assume $0.0015 / 1K tokens for input, $0.006 / 1K for output
+        # Average ~500 input + 250 output = 750 tokens per LLM call
+        avg_tokens_per_call = 750
+        cost_per_call = (500 * 0.0015 + 250 * 0.006) / 1000
+        estimated_savings = round(total_cache_hits * cost_per_call, 4)
+
+        # Cacheable entries = assistant messages produced by LLM calls
+        total_cacheable_entries = total_llm_calls
+
+        return {
+            "total_cacheable_entries": total_cacheable_entries,
+            "total_llm_calls": total_llm_calls,
+            "total_cache_hits": total_cache_hits,
+            "estimated_cost_savings_usd": estimated_savings,
+            "recent_hit_rate_percent": recent_hit_rate,
+            "recent_llm_calls": recent_llm_calls,
+            "recent_cache_hits": recent_cache_hits,
+            "cache_config": {
+                "enabled": config.SEMANTIC_CACHE.get("enabled", True),
+                "similarity_threshold": config.SEMANTIC_CACHE.get("similarity_threshold", 0.90),
+                "feedback_ratio": config.SEMANTIC_CACHE.get("feedback_ratio", 1.30),
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error fetching cache stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/cache-reuse")
+async def get_cache_reuse(
+    limit: int = 20,
+    user: dict = Depends(get_current_admin),
+):
+    """
+    Returns the most frequently reused cached answers.
+    Aggregates assistant messages by cached_from_message_id to show which
+    historical responses are being served from cache most often.
+    """
+    try:
+        db = MongoDB.get_db()
+        msgs = db["messages"]
+
+        # 1. Aggregate reuse counts
+        reuse_counts = list(
+            msgs.aggregate(
+                [
+                    {
+                        "$match": {
+                            "role": "assistant",
+                            "cached_from_message_id": {"$exists": True, "$ne": None},
+                        }
+                    },
+                    {
+                        "$group": {
+                            "_id": "$cached_from_message_id",
+                            "reuse_count": {"$sum": 1},
+                            "last_used": {"$max": "$timestamp"},
+                        }
+                    },
+                    {"$sort": {"reuse_count": -1}},
+                    {"$limit": limit},
+                ]
+            )
+        )
+
+        if not reuse_counts:
+            return {"entries": []}
+
+        # 2. Fetch original message details
+        original_ids = [r["_id"] for r in reuse_counts]
+        originals = {
+            str(o["message_id"]): o
+            for o in msgs.find(
+                {"message_id": {"$in": original_ids}},
+                {
+                    "_id": 0,
+                    "message_id": 1,
+                    "content": 1,
+                    "role": 1,
+                    "likes_count": 1,
+                    "dislikes_count": 1,
+                    "chat_id": 1,
+                    "timestamp": 1,
+                },
+            )
+        }
+
+        # 3. Fetch preceding user question for each original (if assistant)
+        entries = []
+        for r in reuse_counts:
+            orig_id = str(r["_id"])
+            orig = originals.get(orig_id, {})
+            orig_content = orig.get("content", "")
+            orig_role = orig.get("role", "")
+
+            # Find the question that generated this original answer
+            question = ""
+            if orig_role == "assistant":
+                chat_id = orig.get("chat_id")
+                ts = orig.get("timestamp")
+                if chat_id and ts:
+                    user_msg = msgs.find_one(
+                        {
+                            "chat_id": chat_id,
+                            "role": "user",
+                            "timestamp": {"$lt": ts},
+                        },
+                        {"_id": 0, "content": 1},
+                        sort=[("timestamp", -1)],
+                    )
+                    if user_msg:
+                        question = user_msg.get("content", "")
+
+            last_ts = r.get("last_used")
+            entries.append(
+                {
+                    "original_message_id": orig_id,
+                    "original_content": orig_content[:300] + "..."
+                    if len(orig_content) > 300
+                    else orig_content,
+                    "question": question[:200] + "..." if len(question) > 200 else question,
+                    "reuse_count": int(r.get("reuse_count", 0)),
+                    "likes_count": int(orig.get("likes_count", 0)),
+                    "dislikes_count": int(orig.get("dislikes_count", 0)),
+                    "last_reused": last_ts.isoformat()
+                    if isinstance(last_ts, datetime)
+                    else str(last_ts),
+                }
+            )
+
+        return {"entries": entries}
+    except Exception as e:
+        logger.error(f"Error fetching cache reuse analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/flagged-answers")
+async def get_flagged_answers(
+    limit: int = 50,
+    min_dislikes: int = 1,
+    user: dict = Depends(get_current_admin),
+):
+    """
+    Returns assistant messages that received thumbs-down (potential poisoned cache entries).
+    """
+    try:
+        db = MongoDB.get_db()
+        msgs = db["messages"]
+        chats = db["chats"]
+
+        pipeline = [
+            {
+                "$match": {
+                    "role": "assistant",
+                    "dislikes_count": {"$gte": min_dislikes},
+                }
+            },
+            {"$sort": {"dislikes_count": -1, "timestamp": -1}},
+            {"$limit": limit},
+            {
+                "$project": {
+                    "_id": 0,
+                    "message_id": 1,
+                    "chat_id": 1,
+                    "content": 1,
+                    "timestamp": 1,
+                    "likes_count": {"$ifNull": ["$likes_count", 0]},
+                    "dislikes_count": {"$ifNull": ["$dislikes_count", 0]},
+                    "feedback": {"$ifNull": ["$feedback", 0]},
+                    "sources": 1,
+                }
+            },
+        ]
+
+        raw_flagged = list(msgs.aggregate(pipeline))
+
+        # Enrich with chat titles
+        chat_ids = [f["chat_id"] for f in raw_flagged]
+        chat_titles = {
+            str(c["chat_id"]): c.get("title", "Untitled")
+            for c in chats.find(
+                {"chat_id": {"$in": chat_ids}}, {"_id": 0, "chat_id": 1, "title": 1}
+            )
+        }
+
+        flagged = []
+        for f in raw_flagged:
+            ts = f.get("timestamp")
+            flagged.append({
+                "message_id": str(f["message_id"]),
+                "chat_id": str(f["chat_id"]),
+                "content": str(f.get("content", "")),
+                "timestamp": ts.isoformat() if isinstance(ts, datetime) else str(ts),
+                "likes_count": int(f.get("likes_count", 0)),
+                "dislikes_count": int(f.get("dislikes_count", 0)),
+                "feedback": int(f.get("feedback", 0)),
+                "sources": [],
+                "chat_title": chat_titles.get(str(f["chat_id"]), "Untitled"),
+            })
+
+        return {"flagged": flagged, "count": len(flagged)}
+    except Exception as e:
+        logger.error(f"Error fetching flagged answers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/summary")

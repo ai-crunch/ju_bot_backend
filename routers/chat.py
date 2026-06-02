@@ -22,7 +22,18 @@ router = APIRouter(
     tags=["chat"],
 )
 qdrant_vdb = QdrantVDB()
-client = OpenAI(api_key=config.OPENAI["api_key"])
+
+# Lazy OpenAI client to avoid crashing on startup when API key is missing / empty.
+_openai_client: OpenAI | None = None
+
+def _get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        key = config.OPENAI.get("api_key") or os.getenv("OPENAI_API_KEY")
+        if not key:
+            raise HTTPException(status_code=503, detail="OpenAI API key is not configured.")
+        _openai_client = OpenAI(api_key=key)
+    return _openai_client
 
 
 class Message(BaseModel):
@@ -63,7 +74,7 @@ class ChatResponse(BaseModel):
 
 
 def get_llm_response(messages: List[dict]) -> str:
-    response = client.chat.completions.create(
+    response = _get_openai_client().chat.completions.create(
         model=config.OPENAI["model"],
         messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
     )

@@ -5,7 +5,7 @@ It indexes the scraped web content and the OCR results.
 
 import os
 import json
-from typing import List
+from typing import List, Dict, Any
 
 from utils.vdb import QdrantVDB
 from utils.logger import get_logger
@@ -46,8 +46,18 @@ class Generator:
             file_path = content.file_path
             source_link = content.source_link
             source_title = content.source_title
-            chunks = self._open_json_file(file_path)
-            self.qdrant.upsert_web_source(chunks, source_link, source_title)
+            raw_chunks = self._open_json_file(file_path)
+
+            # If the JSON already contains structured chunks with content, use them directly.
+            # Otherwise, run the semantic splitter over the raw text.
+            if raw_chunks and isinstance(raw_chunks, list) and isinstance(raw_chunks[0], dict) and "content" in raw_chunks[0]:
+                self.qdrant.upsert_web_source(raw_chunks, source_link, source_title)
+            else:
+                # Fallback: treat the whole loaded data as a single text blob
+                text = json.dumps(raw_chunks, ensure_ascii=False) if not isinstance(raw_chunks, str) else raw_chunks
+                self.splitter.document_hierarchy = source_title
+                structured = self.splitter.split_structured(text)
+                self.qdrant.upsert_structured_chunks(structured, source_link, source_title)
         logger.info("Web content indexed successfully")
 
     def index_ocr_results(self, data_path: str, ocr_results_dir: str):
@@ -98,7 +108,9 @@ class Generator:
             }
 
             text = json_file.get("text", "")
-            chunks = self.splitter.split(text)
-            self.qdrant.upsert_extracted_ocr(chunks, file_metadata)
+            # Use the structured semantic splitter (returns dicts with metadata)
+            self.splitter.document_hierarchy = source_title
+            structured_chunks = self.splitter.split_structured(text)
+            self.qdrant.upsert_structured_ocr(structured_chunks, file_metadata)
 
         logger.info("OCR results indexed successfully")

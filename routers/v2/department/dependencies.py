@@ -4,14 +4,11 @@ from models.user import UserDB
 user_db = UserDB()
 
 
-async def get_current_department_editor(user_id: str):
-    """
-    يسمح لـ department_editor و admin فقط بالوصول
-    """
-    if not user_id:
+async def get_current_department_editor(api_key: str):
+    if not api_key:
         raise HTTPException(status_code=401, detail="Authentication required")
-    
-    user = user_db.get_user_by_id(user_id)
+
+    user = user_db.get_user_by_api_key(api_key)
     if not user:
         raise HTTPException(status_code=403, detail="User not found")
     

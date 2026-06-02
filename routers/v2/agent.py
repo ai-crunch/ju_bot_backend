@@ -6,6 +6,8 @@ from agent.agent import JUAgent
 from utils.vdb import QdrantVDB
 from utils.logger import get_logger
 from utils.source_handler import enhance_source_metadata
+from utils.embedder import Embedder
+from utils.semantic_cache import SemanticCache
 
 import config
 
@@ -33,6 +35,8 @@ def get_vdb():
 chat_db = ChatDB()
 message_db = MessageDB()
 user_db = UserDB()
+embedder = Embedder()
+semantic_cache = SemanticCache()
 
 
 @router.post("/agent")
@@ -86,18 +90,67 @@ async def response(request: ChatRequest) -> ChatResponse:
             chat_db.collection.insert_one(chat.model_dump())
             logger.info(f"Created new chat for user {user_id} with ID: {chat_id}")
 
-        # 3. Store the user's message
+        # 3. Embed and store the user's message
+        question_embedding = embedder.embed([question])[0]
         user_msg = MessageModel(
             user_id=user_id,
             chat_id=chat_id,
             role="user",
             content=question,
             type="agent",
+            embedding=question_embedding,
         )
         message_db.add_message(user_msg)
 
-        # 4. Generate agent response
-        agent = get_agent(user_id, chat_id)
+        # 4. Semantic cache lookup
+        cached = None
+        if config.SEMANTIC_CACHE.get("enabled", True):
+            cached = semantic_cache.lookup(
+                user_id=user_id,
+                question=question,
+                question_embedding=question_embedding,
+                type_filter="agent",
+                exclude_message_id=user_msg.message_id,
+            )
+
+        if cached:
+            cached_sources = []
+            for src in cached.get("sources", []):
+                if isinstance(src, dict):
+                    cached_sources.append(Source(**src))
+                else:
+                    cached_sources.append(src)
+
+            agent_msg = MessageModel(
+                user_id=user_id,
+                chat_id=chat_id,
+                role="assistant",
+                content=cached["response"],
+                model=config.OPENAI["model"],
+                type="agent",
+                sources=[s.model_dump() for s in cached_sources],
+                cached_from_message_id=cached.get("cached_from_message_id"),
+            )
+            message_db.add_message(agent_msg)
+
+            logger.info(
+                f"Semantic cache HIT in Agent endpoint for user {user_id} | chat {chat_id} | "
+                f"cached_from={cached.get('cached_from_message_id')}"
+            )
+            return ChatResponse(
+                response=cached["response"],
+                sources=cached_sources,
+                chat_id=chat_id,
+                message_id=agent_msg.message_id,
+            )
+
+        # 5. Generate agent response (cache miss)
+        try:
+            agent = get_agent(user_id, chat_id)
+        except ValueError as ve:
+            logger.error(f"Agent configuration error: {ve}")
+            raise HTTPException(status_code=503, detail=str(ve))
+
         response_text, sources_ids = agent.answer(user_id, chat_id, messages)
 
         vdb = get_vdb()
@@ -107,7 +160,7 @@ async def response(request: ChatRequest) -> ChatResponse:
             enhanced_source = enhance_source_metadata(source.payload)
             structured_sources.append(Source(**enhanced_source))
 
-        # 5. Store the agent's response
+        # 6. Store the agent's response
         agent_msg = MessageModel(
             user_id=user_id,
             chat_id=chat_id,
@@ -123,9 +176,12 @@ async def response(request: ChatRequest) -> ChatResponse:
             response=response_text,
             sources=structured_sources,
             chat_id=chat_id,
+            message_id=agent_msg.message_id,
         )
         return chat_response
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in agent response: {e}")
         response = "I'm having trouble answering your question. Please try again."

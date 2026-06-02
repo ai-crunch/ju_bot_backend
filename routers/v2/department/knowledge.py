@@ -159,7 +159,7 @@ async def get_knowledge_base(user: dict = Depends(get_current_department_editor)
         )
 
 
-@router.put("/toggle/{source_id}")
+@router.put("/toggle")
 async def toggle_source_status(
     source_id: str,
     is_active: bool = True,
@@ -174,7 +174,7 @@ async def toggle_source_status(
             limit=1,
             with_payload=True,
             with_vectors=False,
-            filter=Filter(
+            scroll_filter=Filter(
                 must=[FieldCondition(key="file_path", match=MatchValue(value=source_id))]
             ),
         )
@@ -197,8 +197,9 @@ async def toggle_source_status(
         )
 
 
-@router.delete("/{file_path:path}")
-async def delete_source(file_path: str, user: dict = Depends(get_current_department_editor)):
+@router.delete("/delete")
+async def delete_source(source_id: str, user: dict = Depends(get_current_department_editor)):
+    file_path = source_id
     try:
         client = get_qdrant_client()
         collection_name = config.QDRANT["collection_name"]
@@ -208,7 +209,7 @@ async def delete_source(file_path: str, user: dict = Depends(get_current_departm
             limit=1,
             with_payload=True,
             with_vectors=False,
-            filter=Filter(
+            scroll_filter=Filter(
                 must=[FieldCondition(key="file_path", match=MatchValue(value=file_path))]
             ),
         )
