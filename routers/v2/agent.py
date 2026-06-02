@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from routers.v2.auth import get_current_user
 from agno.models.openai import OpenAIChat
 
 from models.qa_messages import ChatRequest, ChatResponse, SourceMetadata, Source
@@ -40,14 +41,11 @@ semantic_cache = SemanticCache()
 
 
 @router.post("/agent")
-async def response(request: ChatRequest) -> ChatResponse:
+async def response(request: ChatRequest, current_user: dict = Depends(get_current_user)) -> ChatResponse:
     request_dict = request.to_dict()
     messages = request_dict["messages"]
     chat_id = request_dict["chat_id"]
-    user_id = request_dict["user_id"]
-
-    if not user_id:
-        user_id = "user_test_id"
+    user_id = current_user["user_id"]
 
     chat_id = str(chat_id)
     question = messages[-1]["content"]

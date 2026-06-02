@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional, Literal, Any
+from routers.v2.auth import get_current_user
 from pydantic import BaseModel
 from datetime import datetime
 from models.chat import ChatDB
@@ -50,11 +51,13 @@ class FeedbackRequest(BaseModel):
 
 
 @router.get("/{user_id}", response_model=List[ChatListItem])
-async def get_user_chats(user_id: str):
+async def get_user_chats(user_id: str, current_user: dict = Depends(get_current_user)):
     """
     Retrieves all chats for a specific user, sorted by newest first.
     Titles are derived from the first user message of each chat.
     """
+    if not current_user.get("is_admin") and current_user["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     try:
         # Get chats for the user
         chats = chat_db.get_user_chats(user_id)
@@ -101,11 +104,13 @@ async def get_user_chats(user_id: str):
 
 
 @router.get("/{user_id}/{chat_id}/messages", response_model=List[MessageResponse])
-async def get_chat_messages(user_id: str, chat_id: str):
+async def get_chat_messages(user_id: str, chat_id: str, current_user: dict = Depends(get_current_user)):
     """
     Retrieves all messages for a specific chat.
     Validates that the chat belongs to the specified user.
     """
+    if not current_user.get("is_admin") and current_user["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     try:
         logger.info(f"Fetching messages for user {user_id} and chat {chat_id}")
         # Validate chat ownership
@@ -187,7 +192,7 @@ async def get_chat_messages(user_id: str, chat_id: str):
 
 
 @router.delete("/{user_id}/{chat_id}")
-async def delete_chat(user_id: str, chat_id: str):
+async def delete_chat(user_id: str, chat_id: str, current_user: dict = Depends(get_current_user)):
     """
     Soft deletes a chat for a specific user.
     """
@@ -197,7 +202,8 @@ async def delete_chat(user_id: str, chat_id: str):
         if not chat:
             raise HTTPException(status_code=404, detail="Chat not found")
 
-        if str(chat["user_id"]) != str(user_id):
+        is_owner = str(chat["user_id"]) == str(current_user["user_id"])
+        if not is_owner and not current_user.get("is_admin"):
             raise HTTPException(
                 status_code=403,
                 detail="Access denied: Chat does not belong to this user",

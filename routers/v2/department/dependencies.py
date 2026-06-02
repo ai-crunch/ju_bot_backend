@@ -1,10 +1,14 @@
-from fastapi import HTTPException, status
+from fastapi import Header, HTTPException, status
 from models.user import UserDB
+from typing import Optional
 
 user_db = UserDB()
 
 
-async def get_current_department_editor(api_key: str):
+async def get_current_department_editor(authorization: Optional[str] = Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    api_key = authorization.removeprefix("Bearer ").strip()
     if not api_key:
         raise HTTPException(status_code=401, detail="Authentication required")
 

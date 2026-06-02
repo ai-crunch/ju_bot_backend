@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from models.user import User, UserDB
 from typing import Optional
@@ -7,7 +7,10 @@ router = APIRouter(prefix="/v2", tags=["auth"])
 user_db = UserDB()
 
 
-def get_current_user(api_key: str) -> dict:
+def get_current_user(authorization: Optional[str] = Header(default=None)) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    api_key = authorization.removeprefix("Bearer ").strip()
     if not api_key:
         raise HTTPException(status_code=401, detail="Authentication required")
     user = user_db.get_user_by_api_key(api_key)

@@ -1,6 +1,7 @@
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from routers.v2.auth import get_current_user
 from openai import OpenAI
 from typing import List, Tuple
 from qdrant_client.http.models import Record
@@ -101,13 +102,10 @@ def answer(messages: List[Message]) -> tuple[str, List[Source]]:
 
 
 @router.post("/rag")
-async def response(request: ChatRequest) -> ChatResponse:
+async def response(request: ChatRequest, current_user: dict = Depends(get_current_user)) -> ChatResponse:
     messages = request.messages
     chat_id = request.chat_id
-    user_id = request.user_id
-
-    if not user_id:
-        user_id = "user_test_id"
+    user_id = current_user["user_id"]
 
     chat_id = str(chat_id)
     question = messages[-1].content
@@ -241,13 +239,10 @@ async def response(request: ChatRequest) -> ChatResponse:
 
 
 @router.post("/rag/stream")
-async def stream_response(request: ChatRequest):
+async def stream_response(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     messages = request.messages
     chat_id = request.chat_id
-    user_id = request.user_id
-
-    if not user_id:
-        user_id = "user_test_id"
+    user_id = current_user["user_id"]
 
     chat_id = str(chat_id)
     question = messages[-1].content
