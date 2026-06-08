@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 6,
+    "timestamp": "2026-06-09T09:02:09.681712",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### LIST OF TABLES\n\n| Table | Description  | Page |\n|-------|--------------|------|\n| 1.1   | Table name   | 19   |\n| 2.2   | Table name   | 22   |\n| 3.4   | Table name   | 28   |\n| 4.6   | Table name   | 35   |\n\n---\n\nThis page contains a list of tables along with their corresponding page numbers. Each entry provides a table identifier and a brief description."
+}

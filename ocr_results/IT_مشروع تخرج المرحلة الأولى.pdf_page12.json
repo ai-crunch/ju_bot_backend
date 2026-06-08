@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 12,
+    "timestamp": "2026-06-09T09:02:52.762295",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### 2.1 Introduction to Polymers\n\nPolymers constitute a broad class of materials composed of long-chain macromolecules formed through the repetitive linkage of smaller molecular units known as monomers. These macromolecular chains are interconnected by covalent bonds, resulting in materials that exhibit a wide range of physical, chemical, and thermal properties. The ability to tailor polymer structure at the molecular level enables the design of materials suitable for diverse engineering applications.\n\nIn modern engineering practice, polymers have become indispensable materials in sectors such as construction, transportation, electrical insulation, packaging, and consumer products. Their widespread utilization is primarily attributed to their low density, ease of processing, resistance to corrosion, and economic advantages compared to conventional materials such as metals and ceramics.\n\nDespite these advantages, polymers display distinct behavior when exposed to elevated temperatures and fire conditions. Owing to their organic chemical structure, most polymers are combustible and can significantly contribute to fire development through heat release, smoke generation, and emission of toxic gases. Consequently, understanding the thermal and fire behavior of polymers is essential in fire safety engineering and provides the theoretical foundation for the experimental investigations presented in this research [7]."
+}

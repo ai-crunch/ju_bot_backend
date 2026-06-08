@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 17,
+    "timestamp": "2026-06-09T09:04:00.941461",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### Extracted Text\n\n**From a fire safety standpoint,** bio-plastics exhibit thermal and combustion behavior that differs from conventional plastics due to their oxygen-rich molecular structures. Upon exposure to elevated temperatures, bio-plastics undergo thermal degradation and pyrolysis, releasing combustible gases in a manner similar to petroleum-based plastics. However, variations may be observed in decomposition temperature, heat release rate, smoke generation, and char formation, depending on material composition.\n\nCertain bio-plastics demonstrate an increased tendency to form char during combustion, which may act as a protective thermal barrier that slows heat transfer and reduces material degradation. Nevertheless, many bio-plastics still exhibit limited inherent fire resistance, including relatively low ignition temperatures and significant smoke production, thereby restricting their use in fire-sensitive building applications unless further material modification is applied[22].\n\nAccordingly, a central research question arises as to whether bio-plastics can serve as safer alternatives to conventional plastics when exposed to fire. Addressing this question requires a systematic evaluation of key fire-related parameters, including heat release rate, mass loss rate, smoke generation, and thermal conductivity, which form the basis of the experimental investigations presented in Chapter 3.\n\n---\n\n### 2.5 Comparison Between Conventional Plastics and Bio-Plastics\n\nConventional plastics and bio-plastics differ significantly in terms of origin, environmental impact, and fire behavior. Conventional plastics provide excellent durability and mechanical performance; however, they are associated with high flammability, dense smoke production, toxic gas emissions, and extremely slow environmental degradation.\n\nIn contrast, bio-plastics offer environmental advantages through the use of renewable resources and, in some cases, improved biodegradability. Despite these benefits, bio-plastics often exhibit inferior fire performance compared to conventional plastics unless appropriate modifications are implemented."
+}

@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 18,
+    "timestamp": "2026-06-09T09:04:11.651269",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### Table (2.1): Comparison Between Conventional Plastics and Bio-Plastics\n\n| Aspect                  | Conventional Plastics               | Bio-Plastics                     |\n|------------------------|-------------------------------------|----------------------------------|\n| Raw material source     | Petroleum-based                     | Renewable biological resources    |\n| Environmental impact    | High, non-biodegradable             | Reduced, partially biodegradable  |\n| Thermal stability       | Moderate to high                   | Generally lower                   |\n| Fire behavior           | High flammability, high HRR        | Variable, often lower HRR         |\n| Smoke and toxic gases   | Dense and toxic                    | Depends on composition            |\n| Degradation in soil     | Very slow (decades–centuries)      | Faster, depending on type        |\n\n### 2.6 Chapter Summary\n\nThis chapter presented a comprehensive overview of polymeric materials, including their classification, structural characteristics, and behavior under fire exposure. Particular emphasis was placed on conventional plastics due to their widespread use and associated fire and environmental challenges. Bio-plastics were discussed as promising alternatives, highlighting both their advantages and current limitations in fire-related applications.\n\nThe concepts developed in this chapter provide the theoretical foundation for Chapter 3, which introduces the experimental instruments used to evaluate thermal stability, fire behavior, and thermal conductivity of polymeric materials. These standardized testing techniques enable a systematic comparison between conventional plastics and bio-plastics under controlled laboratory conditions."
+}

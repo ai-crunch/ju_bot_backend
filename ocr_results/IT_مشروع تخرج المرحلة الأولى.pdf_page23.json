@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 23,
+    "timestamp": "2026-06-09T09:04:57.943703",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### 3.2.3 Parameters Measured\n\nTGA provides the following key outputs:\n\n- Onset decomposition temperature.\n- Mass loss stages and rates.\n- Residual mass (char yield or ash content).\n- Derivative thermogravimetric (DTG) curve.\n\nThese parameters are essential for evaluating the effectiveness of material modifications aimed at improving fire resistance.\n\n### 3.3 Differential Scanning Calorimetry (DSC)\n\n#### 3.3.1 Introduction\n\nDifferential Scanning Calorimetry (DSC) is a thermal analysis technique that measures heat flow associated with thermal transitions in materials as a function of temperature. DSC is commonly used to characterize polymers by identifying transitions such as glass transition, melting, and crystallization, which influence material behavior under thermal and fire exposure.\n\n#### 3.3.2 Principle of Operation\n\nIn DSC analysis, both the sample and a reference material are subjected to the same controlled temperature program. The instrument measures the difference in heat flow required to maintain both at the same temperature. Thermal transitions within the sample appear as endothermic or exothermic peaks on the DSC thermogram.\n\nThis method provides insight into structural and thermal changes occurring within the polymer matrix. Figure (3.3) illustrates the Differential Scanning Calorimetry (DSC) device used to examine the thermal behavior of the tested materials."
+}
