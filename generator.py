@@ -3,6 +3,8 @@ This script is used to generate the vector database for the Ju Bot.
 It indexes the scraped web content and the OCR results.
 """
 
+import os
+
 from utils.logger import get_logger
 from utils.vdb import QdrantVDB
 from utils.generator import Generator
@@ -41,6 +43,9 @@ if __name__ == "__main__":
     generator.index_web_content(web_content)
 
     data_path = config.DATA_DIR_PATH
-    ocr_results_dir = config.OCR["results_dir"]
+    # Only index system OCR results (produced by ocr_pdf_files.py).
+    # API-upload OCR files live in the parent ocr_results/ directory and must
+    # never be re-indexed here with a different method or ID scheme.
+    ocr_results_dir = os.path.join(config.OCR["results_dir"], "system")
     generator.index_ocr_results(data_path, ocr_results_dir)
     logger.info("Generator completed successfully")

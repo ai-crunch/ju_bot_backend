@@ -116,7 +116,7 @@ class SemanticCache:
         """
         # 1. Embed the incoming question if not provided
         if question_embedding is None:
-            question_embedding = self.embedder.embed([question])[0]
+            question_embedding = self.embedder.embed([question], is_query=True)[0]
 
         # 2. Query recent user messages that have embeddings stored
         since = datetime.utcnow() - timedelta(days=self.lookback_days)

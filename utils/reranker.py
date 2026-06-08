@@ -6,6 +6,16 @@ logger = get_logger(__name__)
 
 
 class Reranker:
+    """
+    Cross-encoder reranker backed by sentence_transformers.CrossEncoder.
+
+    Uses CrossEncoder instead of FlagEmbedding.FlagReranker to avoid the
+    ``XLMRobertaTokenizer has no attribute prepare_for_model`` error that
+    appears with newer versions of the transformers library.  CrossEncoder
+    supports the same BAAI/bge-reranker-v2-m3 checkpoint and produces
+    identical scores.
+    """
+
     _instance = None
 
     def __new__(cls, *args, **kwargs):
@@ -26,11 +36,11 @@ class Reranker:
         if self._model is not None:
             return
         logger.info(f"Loading Reranker model {self.model_name} on {self.device}...")
-        from FlagEmbedding import FlagReranker
-        self._model = FlagReranker(
+        from sentence_transformers import CrossEncoder
+        self._model = CrossEncoder(
             self.model_name,
-            use_fp16=(self.device == "cuda"),
             device=self.device,
+            model_kwargs={"ignore_mismatched_sizes": True},
         )
         logger.info("Reranker model loaded successfully")
 
@@ -43,6 +53,11 @@ class Reranker:
             return []
         self._load_model()
         pairs = [(query, doc["text"]) for doc in documents]
-        scores = self._model.compute_score(pairs, normalize=True)
+        raw_scores = self._model.predict(pairs)
+        # Normalise to [0, 1] via sigmoid so scores are comparable across runs.
+        import math
+        def _sigmoid(x: float) -> float:
+            return 1.0 / (1.0 + math.exp(-x))
+        scores = [_sigmoid(float(s)) for s in raw_scores]
         scored = sorted(zip(documents, scores), key=lambda x: x[1], reverse=True)
         return scored[:top_k]

@@ -80,9 +80,28 @@ class Generator:
         ]
         logger.info(f"Found {len(ocr_files)} OCR result files")
 
+        uploads_prefix = os.path.join(data_path, "uploads")
+
         for file_path in ocr_files:
             json_file = self._open_json_file(file_path)
-            original_pdf_path = json_file.get("metadata", {}).get("file_path", "")
+            metadata = json_file.get("metadata", {})
+
+            # Belt-and-suspenders: skip any OCR file that belongs to an API upload.
+            # These files should never reach this code path because the generator
+            # is now directed at ocr_results/system/, but guard explicitly in case
+            # a file is misplaced.
+            if metadata.get("department_id"):
+                logger.warning(
+                    f"Skipping department upload OCR file (should not be in system dir): {file_path}"
+                )
+                continue
+            original_pdf_path = metadata.get("file_path", "")
+            if original_pdf_path.startswith(uploads_prefix):
+                logger.warning(
+                    f"Skipping admin upload OCR file (should not be in system dir): {file_path}"
+                )
+                continue
+
             if not original_pdf_path:
                 logger.error(f"No PDF found in OCR metadata for: {file_path}")
                 continue
@@ -95,7 +114,6 @@ class Generator:
             
             file_name = os.path.basename(file_path)
             source_title = file_name.replace(".pdf", "")
-            metadata = json_file.get("metadata", {})
             file_metadata = {
                 "filename": file_name,
                 "path": file_path,
@@ -104,7 +122,6 @@ class Generator:
                 "page_number": metadata.get("page_number", 0),
                 "timestamp": metadata.get("timestamp", ""),
                 "model": metadata.get("model", ""),
-                "is_web_source": False,
             }
 
             text = json_file.get("text", "")

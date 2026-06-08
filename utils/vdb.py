@@ -1,7 +1,4 @@
-import os
-import uuid
-import fitz
-import json
+import hashlib
 from typing import Any, List, Dict
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import PointStruct, Record
@@ -18,8 +15,6 @@ from qdrant_client.models import (
     FusionQuery,
     Fusion,
 )
-from agno.tools import tool
-
 from utils.embedder import Embedder, SparseEmbedder
 from utils.splitter import TextSplitter
 from utils.logger import get_logger
@@ -76,30 +71,25 @@ class QdrantVDB:
                     raise
         
         self.embedder = Embedder()
-        self.splitter = TextSplitter(
-            chunk_size=config.CHUNK_SIZE, overlap=config.CHUNK_OVERLAP
-        )
+        # splitter is NOT cached here — it is constructed on-demand inside
+        # embed_ocr_results so it always picks up the current config values
+        # after a config.reload_config() call.
         self.collection_name = collection_name
         if not self.collection_exists(collection_name):
             self.create_collection()
 
         self._initialized = True
 
-    def _read_pdf(self, pdf_path):
-        text = ""
-        try:
-            with fitz.open(pdf_path) as doc:
-                for page in doc:
-                    text += page.get_text()
-        except fitz.FileNotFoundError:
-            return "Error: PDF file not found."
-        return text
-
     def collection_exists(self, collection_name: str) -> bool:
         return self.client.collection_exists(collection_name)
 
-    def _embed_both(self, chunks_text):
-        dense = self.embedder.embed(chunks_text)
+    def _embed_both(self, chunks_text, is_query: bool = False):
+        """Embed chunks for both dense and sparse indices.
+
+        Pass ``is_query=True`` when embedding a search query so E5-family
+        models receive the correct 'query: ' prefix instead of 'passage: '.
+        """
+        dense = self.embedder.embed(chunks_text, is_query=is_query)
         sparse = SparseEmbedder().embed(chunks_text)
         return dense, sparse
 
@@ -126,18 +116,38 @@ class QdrantVDB:
             return SparseVector(indices=indices, values=values)
         return vec
 
+    @staticmethod
+    def _stable_id(id_string: str) -> int:
+        """
+        Derive a deterministic 64-bit integer point ID from an arbitrary string.
+
+        Uses the first 16 hex digits of SHA-256, which gives a stable unsigned
+        64-bit value that is independent of PYTHONHASHSEED.  This means the same
+        logical document always maps to the same Qdrant point ID across server
+        restarts, making upsert idempotent and toggle/delete reliable.
+        """
+        return int(hashlib.sha256(id_string.encode()).hexdigest()[:16], 16)
+
     def create_collection(self):
-        self.client.create_collection(
-            collection_name=self.collection_name,
-            vectors_config=VectorParams(
-                size=self.embedder.OUTPUT_SIZE, distance=Distance.COSINE
-            ),
-            sparse_vectors_config={
-                "sparse": SparseVectorParams(
-                    index=SparseIndexParams(on_disk=True)
+        try:
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(
+                    size=self.embedder.OUTPUT_SIZE, distance=Distance.COSINE
+                ),
+                sparse_vectors_config={
+                    "sparse": SparseVectorParams(
+                        index=SparseIndexParams(on_disk=True)
+                    )
+                },
+            )
+        except Exception as e:
+            if "already exists" in str(e):
+                logger.info(
+                    f"Collection '{self.collection_name}' already exists — skipping creation."
                 )
-            },
-        )
+            else:
+                raise
 
     def upsert_web_source(
         self,
@@ -175,6 +185,7 @@ class QdrantVDB:
                     "text": chunk["content"],
                     "file_path": source_link,
                     "metadata": metadata,
+                    "is_active": True,
                 },
             )
 
@@ -189,124 +200,29 @@ class QdrantVDB:
         )
         return points
 
-    def upsert_extracted_ocr(self, chunks: List[str], file_metadata: Dict):
-        embeddings, sparse_embeddings = self._embed_both(chunks)
-        points = []
-
-        for idx, (chunk, embedding, sparse) in enumerate(zip(chunks, embeddings, sparse_embeddings)):
-            metadata = {
-                **file_metadata,
-                "chunk_index": idx,
-                "total_chunks": len(chunks),
-                "word_count": len(chunk.split()),
-                "is_active": True,
-            }
-
-            unique_id = abs(
-                hash(
-                    f"{file_metadata.get('path', '')}_page_{file_metadata.get('page_number', 0)}_chunk_{idx}"
-                )
-            ) % (2**31)
-            point = PointStruct(
-                id=unique_id,
-                vector={
-                    "": self._dense_to_list(embedding),
-                    "sparse": self._sparse_to_qdrant(sparse),
-                },
-                payload={
-                    "text": chunk,
-                    "file_path": file_metadata.get("path", ""),
-                    "metadata": metadata,
-                },
-            )
-            points.append(point)
-
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points,
-        )
-        return points
-
-    def embed_file(self, file_path: str, metadata: Any = None):
-        text = self._read_pdf(file_path)
-        chunks = self.splitter.split(text)
-        embeddings, sparse_embeddings = self._embed_both(chunks)
-
-        enhanced_metadata = metadata if isinstance(metadata, dict) else {}
-        enhanced_metadata["is_active"] = True
-
-        points = [
-            PointStruct(
-                id=idx,
-                vector={
-                    "": self._dense_to_list(embedding),
-                    "sparse": self._sparse_to_qdrant(sparse),
-                },
-                payload={
-                    "text": chunk,
-                    "file_path": file_path,
-                    "metadata": enhanced_metadata,
-                    "is_active": True,
-                },
-            )
-            for idx, (chunk, embedding, sparse) in enumerate(zip(chunks, embeddings, sparse_embeddings))
-        ]
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points,
-        )
-        return points
-
-    def embed_json_chunks(
-        self, json_chunks: List[Dict], source_link: str, source_title: str
-    ):
-        """
-        Embed pre-chunked data from JSON file.
-        """
-        chunks_text = [chunk["content"] for chunk in json_chunks]
-        embeddings, sparse_embeddings = self._embed_both(chunks_text)
-
-        points = []
-        for idx, (chunk, embedding, sparse) in enumerate(zip(json_chunks, embeddings, sparse_embeddings)):
-            enhanced_metadata = {
-                **(chunk.get("metadata", {})),
-                "source_link": source_link,
-                "source_title": source_title,
-                "chunk_title": chunk.get(
-                    "title", f"Chunk {chunk.get('chunk_id', idx + 1)}"
-                ),
-                "is_web_source": True,
-                "is_active": True,
-            }
-
-            points.append(
-                PointStruct(
-                    id=chunk.get("chunk_id", idx),
-                    vector={
-                        "": self._dense_to_list(embedding),
-                        "sparse": self._sparse_to_qdrant(sparse),
-                    },
-                    payload={
-                        "text": chunk["content"],
-                        "file_path": source_link,
-                        "metadata": enhanced_metadata,
-                        "is_active": True,
-                    },
-                )
-            )
-
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points,
-        )
-        return points
-
     def embed_ocr_results(
-        self, ocr_data: Dict, file_metadata: Dict, chunk_threshold: int = 300
+        self,
+        ocr_data: Dict,
+        file_metadata: Dict,
+        chunk_threshold: int = None,
+        use_semantic: bool = True,
     ):
         """
         Embed OCR results with chunking based on word count threshold.
+
+        ``chunk_threshold`` defaults to ``config.OCR["chunk_threshold"]`` so it
+        always reflects the current dynamic config after a reload_config() call.
+        Callers may override it explicitly for testing or one-off ingestion.
+
+        ``use_semantic`` controls whether the LegalSemanticSplitter is eligible
+        for this document.  Pass ``False`` for non-legal department uploads so
+        files that accidentally contain Arabic legal markers are not chunked as
+        regulations.  The ``_looks_like_legal_text`` heuristic still acts as a
+        second gate when ``use_semantic=True``.
         """
+        if chunk_threshold is None:
+            chunk_threshold = config.OCR["chunk_threshold"]
+
         text = ocr_data.get("text", "")
         ocr_metadata = ocr_data.get("metadata", {})
 
@@ -315,9 +231,23 @@ class QdrantVDB:
         if word_count <= chunk_threshold:
             chunks = [text]
         else:
-            chunks = self.splitter.split(text)
+            # Fresh instance on every call so chunk_size/overlap always reflect
+            # the current config values, even after config.reload_config().
+            # document_hierarchy feeds the LegalSemanticSplitter's context
+            # injection when use_semantic=True.
+            splitter = TextSplitter(
+                chunk_size=config.CHUNK_SIZE,
+                overlap=config.CHUNK_OVERLAP,
+                use_semantic=use_semantic,
+                document_hierarchy=file_metadata.get("source_title"),
+            )
+            chunks = splitter.split(text)
 
         embeddings, sparse_embeddings = self._embed_both(chunks)
+
+        # Canonical document path: always taken from the caller-supplied file_metadata so
+        # it is independent of whatever path was baked into the OCR cache file.
+        canonical_file_path = file_metadata.get("path") or ocr_metadata.get("file_path", "")
 
         points = []
         for idx, (chunk, embedding, sparse) in enumerate(zip(chunks, embeddings, sparse_embeddings)):
@@ -335,11 +265,13 @@ class QdrantVDB:
                 "is_active": True,
             }
 
-            unique_id = abs(
-                hash(
-                    f"{ocr_metadata.get('file_path', '')}_{ocr_metadata.get('page_number', 1)}_{idx}_{ocr_metadata.get('timestamp', '')}"
-                )
-            ) % (2**63 - 1)
+            # Deterministic ID derived from stable fields only (no timestamp) so that
+            # re-uploading the same file upserts existing points rather than creating
+            # duplicates.  SHA-256-based so the value is stable across restarts
+            # regardless of PYTHONHASHSEED.
+            unique_id = self._stable_id(
+                f"{canonical_file_path}_{ocr_metadata.get('page_number', 1)}_{idx}"
+            )
 
             points.append(
                 PointStruct(
@@ -350,7 +282,7 @@ class QdrantVDB:
                     },
                     payload={
                         "text": chunk,
-                        "file_path": ocr_metadata.get("file_path", ""),
+                        "file_path": canonical_file_path,
                         "metadata": enhanced_metadata,
                         "is_active": True,
                     },
@@ -399,6 +331,7 @@ class QdrantVDB:
                     "text": chunk["content"],
                     "file_path": source_link,
                     "metadata": enhanced_metadata,
+                    "is_active": True,
                 },
             )
             points.append(point)
@@ -426,11 +359,9 @@ class QdrantVDB:
 
         for idx, (chunk, embedding, sparse) in enumerate(zip(structured_chunks, embeddings, sparse_embeddings)):
             chunk_meta = chunk.get("metadata", {})
-            unique_id = abs(
-                hash(
-                    f"{file_metadata.get('path', '')}_page_{file_metadata.get('page_number', 0)}_chunk_{chunk.get('chunk_id', idx)}"
-                )
-            ) % (2**31)
+            unique_id = self._stable_id(
+                f"{file_metadata.get('path', '')}_page_{file_metadata.get('page_number', 0)}_chunk_{chunk.get('chunk_id', idx)}"
+            )
 
             enhanced_metadata = {
                 **file_metadata,
@@ -450,6 +381,7 @@ class QdrantVDB:
                     "text": chunk["content"],
                     "file_path": file_metadata.get("path", ""),
                     "metadata": enhanced_metadata,
+                    "is_active": True,
                 },
             )
             points.append(point)
@@ -461,10 +393,22 @@ class QdrantVDB:
         return points
 
     def retrieve(self, query: str, limit: int = None) -> List[Record]:
+        """
+        Hybrid (dense + sparse) retrieval with optional reranking.
+
+        The ``limit`` parameter acts as the final cap on returned results.
+        When the reranker is active it also bounds how many candidates the
+        reranker considers.  When the reranker is disabled, the raw RRF list is
+        sliced to ``limit`` directly.
+
+        The internal ``HYBRID_TOP_K`` config value controls how many candidates
+        Qdrant returns before reranking; it should always be >= limit so the
+        reranker has enough diversity to pick from.
+        """
         if limit is None:
             limit = config.RETRIEVED_CHUNKS
 
-        dense_vec = self.embedder.embed(query)
+        dense_vec = self.embedder.embed(query, is_query=True)
         if dense_vec and isinstance(dense_vec, list) and isinstance(dense_vec[0], list):
             dense_vec = dense_vec[0]
 
@@ -480,7 +424,10 @@ class QdrantVDB:
             ]
         )
 
-        hybrid_limit = config.HYBRID_TOP_K
+        # Fetch enough candidates for the reranker to have diversity.
+        # Use the larger of HYBRID_TOP_K and the requested limit so callers
+        # asking for more results than the default are handled correctly.
+        hybrid_limit = max(config.HYBRID_TOP_K, limit)
         prefetch_limit = max(hybrid_limit // 2, 1)
 
         results = self.client.query_points(
@@ -495,7 +442,9 @@ class QdrantVDB:
             query_filter=query_filter,
         ).points
 
-        rerank_top_k = config.RERANK_TOP_K
+        # Reranker cap is bounded by both config.RERANK_TOP_K and the caller's
+        # requested limit so the tool's limit parameter is finally respected.
+        rerank_top_k = min(config.RERANK_TOP_K, limit)
         if config.RERANKER.get("enabled", True) and len(results) > rerank_top_k:
             from utils.reranker import Reranker
             reranker = Reranker()

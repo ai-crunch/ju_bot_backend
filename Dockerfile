@@ -28,8 +28,10 @@ COPY . .
 # Copy wait script
 COPY wait_for_services.py wait_for_services.py
 
-# Create necessary directories
-RUN mkdir -p data logs ocr_results
+# Create necessary directories.
+# ocr_results/system/ is the exclusive target for ocr_pdf_files.py output;
+# the parent ocr_results/ is used by API upload routers for their OCR cache.
+RUN mkdir -p data logs ocr_results/system
 
 # Expose port
 EXPOSE 8000

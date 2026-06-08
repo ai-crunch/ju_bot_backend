@@ -149,7 +149,7 @@ async def response(request: ChatRequest, current_user: dict = Depends(get_curren
             logger.info(f"Created new chat for user {user_id} with ID: {chat_id}")
 
         # 3. Embed and store the user's message
-        question_embedding = embedder.embed([question])[0]
+        question_embedding = embedder.embed([question], is_query=True)[0]
         user_msg = MessageModel(
             user_id=user_id,
             chat_id=chat_id,
@@ -276,7 +276,7 @@ async def stream_response(request: ChatRequest, current_user: dict = Depends(get
                 logger.info(f"Created new chat {chat_id}")
 
             # 3. Embed and store user message
-            question_embedding = embedder.embed([question])[0]
+            question_embedding = embedder.embed([question], is_query=True)[0]
             user_msg = MessageModel(
                 user_id=user_id,
                 chat_id=chat_id,

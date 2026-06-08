@@ -13,7 +13,7 @@ import base64
 # CONFIGURATION
 # -----------------------------
 PDF_DIR = "data"  # Root directory containing PDFs (and subdirs)
-OUTPUT_DIR = "ocr_results"  # Where to save OCR results
+OUTPUT_DIR = os.path.join("ocr_results", "system")  # System OCR only — never mixed with upload cache
 MODEL = "gpt-4o-mini"  # Vision-capable model
 
 # -----------------------------
