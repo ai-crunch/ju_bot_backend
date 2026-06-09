@@ -1,0 +1,154 @@
+# Production compose for the JU Bot stack (self-contained, run from the repo root).
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yaml --env-file ju_bot_backend/.env up -d --build
+
+services:
+  mongodb:
+    image: mongo:7.0.14
+    container_name: ju_bot_mongodb
+    restart: unless-stopped
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-ju_bot_feedback}
+    networks:
+      - ju_bot_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.1
+    container_name: ju_bot_qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - ju_bot_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:6333/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./ju_bot_backend
+      dockerfile: Dockerfile
+    image: ju_bot_backend:latest
+    container_name: ju_bot_backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password}
+      MONGO_DATABASE: ${MONGO_DATABASE:-ju_bot_feedback}
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      QDRANT_COLLECTION_NAME: ${QDRANT_COLLECTION_NAME:-ju_bot_vdb}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - ./ju_bot_backend/data:/app/data
+      - ./ju_bot_backend/ocr_results:/app/ocr_results
+      - ./ju_bot_backend/logs:/app/logs
+      - ./ju_bot_backend/ju_regulations_data:/app/ju_regulations_data
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    networks:
+      - ju_bot_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/').status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+  seed:
+    image: ju_bot_backend:latest
+    container_name: ju_bot_seed
+    restart: "no"
+    environment:
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password}
+      MONGO_DATABASE: ${MONGO_DATABASE:-ju_bot_feedback}
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      QDRANT_COLLECTION_NAME: ${QDRANT_COLLECTION_NAME:-ju_bot_vdb}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./ju_bot_backend/data:/app/data
+      - ./ju_bot_backend/ocr_results:/app/ocr_results
+      - ./ju_bot_backend/logs:/app/logs
+      - ./ju_bot_backend/ju_regulations_data:/app/ju_regulations_data
+    depends_on:
+      backend:
+        condition: service_started
+      mongodb:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    networks:
+      - ju_bot_network
+    command: ["bash", "/app/seed.sh"]
+
+  frontend:
+    build:
+      context: ./ju_bot_frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: ju_bot_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ju_bot_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  mongodb_data:
+    driver: local
+  qdrant_data:
+    driver: local
+
+networks:
+  ju_bot_network:
+    driver: bridge
