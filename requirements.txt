@@ -4,7 +4,7 @@ fastapi
 pydantic
 openai
 python-dotenv
-qdrant-client
+qdrant-client[fastembed]
 PyMuPDF
 sentence-transformers
 agno
@@ -13,3 +13,7 @@ passlib==1.7.4
 bcrypt==5.0.0
 pydantic[email]
 pillow
+slowapi
+pyotp
+qrcode[pil]
+FlagEmbedding

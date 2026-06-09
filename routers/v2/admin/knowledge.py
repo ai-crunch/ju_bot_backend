@@ -1,20 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List
 import os
 import shutil
-import io
 import json
-import base64
 from datetime import datetime
-from qdrant_client import QdrantClient
-from qdrant_client.http.models import ScrollRequest
-import fitz  # PyMuPDF
-from PIL import Image
-from openai import OpenAI
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 import config
 from routers.v2.admin.dependencies import get_current_admin
 from utils.logger import get_logger
+from utils.ocr import pdf_to_images, ocr_with_gpt
 from utils.vdb import QdrantVDB
 
 logger = get_logger(__name__)
@@ -31,59 +26,6 @@ os.makedirs(OCR_RESULTS_DIR, exist_ok=True)
 def get_qdrant_client():
     return QdrantVDB().client
 
-
-def pdf_to_images(pdf_path):
-    """Convert each PDF page into a PIL Image."""
-    doc = fitz.open(pdf_path)
-    images = []
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        pix = page.get_pixmap(dpi=200)
-        img = Image.open(io.BytesIO(pix.tobytes("png")))
-        images.append((page_num + 1, img))
-    doc.close()
-    return images
-
-
-def ocr_with_gpt(image, api_key, model="gpt-4o-mini"):
-    """Send image to OpenAI Vision model with descriptive OCR prompt."""
-    client = OpenAI(api_key=api_key)
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    buffer.seek(0)
-
-    # Encode image data as base64
-    image_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-    prompt = (
-        "You are an expert OCR and visual document analyzer. "
-        "Extract all text from this page accurately. "
-        "If the page contains tables, charts, or images, describe them in natural language "
-        "within their logical context. Keep structure consistent and readable."
-    )
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a precise document transcription and summarization assistant.",
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{image_data}"},
-                    },
-                ],
-            },
-        ],
-    )
-
-    text = response.choices[0].message.content.strip()
-    return text
 
 
 def save_ocr_result(metadata, text):
@@ -211,6 +153,37 @@ async def toggle_source_status(
         )
 
 
+@router.delete("/delete")
+async def delete_source(source_id: str, user: dict = Depends(get_current_admin)):
+    """
+    Permanently remove all Qdrant points associated with a source from the
+    knowledge base.  ``source_id`` is the ``file_path`` value used as the
+    document identifier (URL for web sources, filesystem path for PDFs).
+    """
+    try:
+        client = get_qdrant_client()
+        collection_name = config.QDRANT["collection_name"]
+
+        client.delete(
+            collection_name=collection_name,
+            points_selector=Filter(
+                must=[
+                    FieldCondition(
+                        key="file_path",
+                        match=MatchValue(value=source_id),
+                    )
+                ]
+            ),
+        )
+        return {"status": "success", "message": f"Source {source_id} deleted"}
+    except Exception as e:
+        logger.error(f"Error deleting source: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete source: {str(e)}",
+        )
+
+
 @router.get("/qdrant-dashboard")
 async def get_qdrant_dashboard(user: dict = Depends(get_current_admin)):
     """
@@ -226,7 +199,9 @@ async def get_qdrant_dashboard(user: dict = Depends(get_current_admin)):
 
 @router.post("/upload")
 async def upload_documents(
-    files: List[UploadFile] = File(...), user: dict = Depends(get_current_admin)
+    files: List[UploadFile] = File(...),
+    is_legal_document: bool = True,
+    user: dict = Depends(get_current_admin),
 ):
     """
     Upload PDF files, perform OCR, and index them in the vector database.
@@ -249,7 +224,7 @@ async def upload_documents(
             )
             continue
 
-        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        file_path = os.path.join(UPLOAD_DIR, os.path.basename(file.filename))
         try:
             # Save the file
             with open(file_path, "wb") as buffer:
@@ -286,6 +261,7 @@ async def upload_documents(
                         "path": file_path,
                         "source_title": file.filename,
                     },
+                    use_semantic=is_legal_document,
                 )
                 processed_pages += 1
 

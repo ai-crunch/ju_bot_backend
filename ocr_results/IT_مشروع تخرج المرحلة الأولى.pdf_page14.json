@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 14,
+    "timestamp": "2026-06-09T09:03:18.298121",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### 2.2.2 Synthetic Polymers\n\nSynthetic polymers are produced through industrial polymerization processes, primarily from petroleum-based raw materials. Common examples include polyethylene (PE), polypropylene (PP), polystyrene (PS), and polyvinyl chloride (PVC). These polymers dominate modern plastic applications due to their durability, versatility, and ease of large-scale production [7].\n\n### 2.2.3 Bio-Based Polymers\n\nBio-based polymers are partially or fully derived from renewable biological resources such as plants or microorganisms. While some bio-based polymers are biodegradable, others may exhibit chemical structures similar to conventional plastics and therefore do not readily degrade. Their principal advantage lies in reducing dependence on fossil resources rather than guaranteeing biodegradability [10].\n\n### 2.2.4 Thermoplastics (Plastics)\n\nThermoplastics represent the most extensively used class of polymer materials and constitute the primary focus of this study. These polymers soften upon heating and solidify upon cooling, allowing repeated reshaping and recycling. Common thermoplastics include PVC, PE, PP, and polyethylene terephthalate (PET).\n\nFrom a fire safety perspective, thermoplastics present several critical challenges. When exposed to heat, thermoplastics initially soften and melt, followed by thermal decomposition (pyrolysis). During pyrolysis, polymer chains break down and release flammable volatile compounds. Once these gases reach their ignition temperature, combustion occurs, resulting in rapid fire growth and high heat release rates.\n\nFurthermore, thermoplastics are known to generate dense smoke and toxic combustion products. For instance, PVC releases hydrogen chloride (HCl) gas during combustion, posing severe health hazards and contributing to the corrosion of building components. These characteristics render conventional plastics a significant concern in fire safety engineering [11]."
+}

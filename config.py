@@ -47,7 +47,7 @@ def reload_config():
     """
     Hot-reloads the configuration from MongoDB.
     """
-    global _config, QDRANT, EMBEDDER, OPENAI, OCR, CHUNK_SIZE, CHUNK_OVERLAP, RETRIEVED_CHUNKS, SYSTEM_FLAGS, ENABLE_REASONING
+    global _config, QDRANT, EMBEDDER, OPENAI, OCR, CHUNK_SIZE, CHUNK_OVERLAP, RETRIEVED_CHUNKS, SYSTEM_FLAGS, ENABLE_REASONING, SEMANTIC_CACHE, SYSTEM_INSTRUCTIONS, MAX_TOKENS, SEMANTIC_CHUNKING, HYBRID_TOP_K, RERANK_TOP_K, RERANKER, SPARSE_EMBEDDER
 
     _config = _load_dynamic_config()
 
@@ -86,6 +86,24 @@ def reload_config():
         CHUNK_SIZE = _config.retrieval.chunk_size
         CHUNK_OVERLAP = _config.retrieval.chunk_overlap
         RETRIEVED_CHUNKS = _config.retrieval.retrieved_chunks
+        HYBRID_TOP_K = _config.retrieval.hybrid_top_k
+        RERANK_TOP_K = _config.retrieval.rerank_top_k
+        RERANKER = {
+            "enabled": _config.retrieval.enable_reranker,
+            "model_name": os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3"),
+            "device": os.getenv("RERANKER_DEVICE", "cpu"),
+        }
+        SPARSE_EMBEDDER = {
+            "provider": "fastembed",
+            "model_name": os.getenv("SPARSE_EMBEDDER_MODEL", "Qdrant/bm25"),
+        }
+
+        # Semantic Chunking (new legal-aware pipeline)
+        SEMANTIC_CHUNKING = (
+            _config.semantic_chunking.model_dump()
+            if hasattr(_config.semantic_chunking, "model_dump")
+            else _config.semantic_chunking.dict()
+        )
 
         # System Flags
         SYSTEM_FLAGS = (
@@ -94,6 +112,17 @@ def reload_config():
             else _config.system_flags.dict()
         )
         ENABLE_REASONING = _config.system_flags.enable_reasoning
+
+        # Semantic Cache
+        SEMANTIC_CACHE = {
+            "enabled": _config.semantic_cache.enabled,
+            "similarity_threshold": _config.semantic_cache.similarity_threshold,
+            "feedback_ratio": _config.semantic_cache.feedback_ratio,
+        }
+
+        # Agent / LLM extras
+        SYSTEM_INSTRUCTIONS = _config.system_instructions
+        MAX_TOKENS = _config.llm.max_tokens
     else:
         # Hardcoded defaults as a last resort
         QDRANT = {
@@ -116,11 +145,32 @@ def reload_config():
             "results_dir": "ocr_results",
             "chunk_threshold": 300,
         }
-        CHUNK_SIZE = 300
+        CHUNK_SIZE = 500
         CHUNK_OVERLAP = 50
-        RETRIEVED_CHUNKS = 5
+        RETRIEVED_CHUNKS = 20
+        HYBRID_TOP_K = 20
+        RERANK_TOP_K = 5
+        RERANKER = {"enabled": True, "model_name": "BAAI/bge-reranker-v2-m3", "device": "cpu"}
+        SPARSE_EMBEDDER = {"provider": "fastembed", "model_name": "Qdrant/bm25"}
+        SEMANTIC_CHUNKING = {
+            "enabled": True,
+            "max_chunk_word_count": 600,
+            "target_chunk_word_count": 350,
+            "min_chunk_word_count": 150,
+            "language_of_output": "Arabic",
+            "context_injection_enabled": True,
+            "hierarchy_delimiter": " -> ",
+            "enforce_sentence_boundaries": True,
+        }
         SYSTEM_FLAGS = {"enable_reasoning": False}
         ENABLE_REASONING = False
+        SEMANTIC_CACHE = {
+            "enabled": True,
+            "similarity_threshold": 0.90,
+            "feedback_ratio": 1.30,
+        }
+        SYSTEM_INSTRUCTIONS = None
+        MAX_TOKENS = 4096
 
 
 # Initialize dynamic config

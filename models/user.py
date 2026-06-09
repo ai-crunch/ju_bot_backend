@@ -11,10 +11,15 @@ class User(BaseModel):
     username: str
     email: str
     hashed_password: str
+    api_key: str = Field(default_factory=lambda: str(uuid.uuid4()))
     role: Literal["user", "department_editor", "admin"] = "user"
     department_id: Optional[str] = None
     department_name: Optional[str] = None
     is_admin: bool = False
+    email_verified: bool = False
+    verification_token: Optional[str] = None
+    totp_secret: Optional[str] = None
+    two_factor_enabled: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     @property
@@ -51,6 +56,23 @@ class UserDB:
         self.collection.create_index("user_id", unique=True)
         self.collection.create_index("username", unique=True)
         self.collection.create_index("email", unique=True)
+        try:
+            self.collection.drop_index("api_key_1")
+        except Exception:
+            pass
+        self.collection.create_index("api_key", unique=True, sparse=True)
+        self._migrate_api_keys()
+
+    def _migrate_api_keys(self):
+        users_without_key = self.collection.count_documents(
+            {"$or": [{"api_key": {"$exists": False}}, {"api_key": None}]}
+        )
+        if users_without_key > 0:
+            for user in self.collection.find(
+                {"$or": [{"api_key": {"$exists": False}}, {"api_key": None}]},
+                {"_id": 0, "user_id": 1},
+            ):
+                self.ensure_api_key(user["user_id"])
 
     def create_user(self, user: User) -> str:
         user_dict = user.model_dump()
@@ -65,6 +87,21 @@ class UserDB:
 
     def get_user_by_email(self, email: str) -> Optional[dict]:
         return self.collection.find_one({"email": email}, {"_id": 0})
+
+    def get_user_by_api_key(self, api_key: str) -> Optional[dict]:
+        return self.collection.find_one({"api_key": api_key}, {"_id": 0})
+
+    def ensure_api_key(self, user_id: str) -> str:
+        user = self.get_user_by_id(user_id)
+        if not user:
+            return ""
+        if user.get("api_key"):
+            return user["api_key"]
+        new_key = str(uuid.uuid4())
+        self.collection.update_one(
+            {"user_id": user_id}, {"$set": {"api_key": new_key}}
+        )
+        return new_key
 
     def get_all_users(self) -> List[dict]:
         return list(self.collection.find({}, {"_id": 0}))
@@ -99,3 +136,39 @@ class UserDB:
 
         result = self.collection.update_one({"user_id": user_id}, update)
         return result.modified_count > 0
+
+    def update_user(self, user_id: str, **kwargs) -> bool:
+        allowed = {"username", "email"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+        if not updates:
+            return False
+
+        if "username" in updates:
+            existing = self.get_user_by_username(updates["username"])
+            if existing and existing["user_id"] != user_id:
+                return False
+
+        if "email" in updates:
+            existing = self.get_user_by_email(updates["email"])
+            if existing and existing["user_id"] != user_id:
+                return False
+
+        result = self.collection.update_one(
+            {"user_id": user_id}, {"$set": updates}
+        )
+        return result.modified_count > 0
+
+    def change_password(self, user_id: str, new_hashed_password: str) -> bool:
+        result = self.collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"hashed_password": new_hashed_password}},
+        )
+        return result.modified_count > 0
+
+    def rotate_api_key(self, user_id: str) -> str:
+        new_key = str(uuid.uuid4())
+        self.collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"api_key": new_key}},
+        )
+        return new_key

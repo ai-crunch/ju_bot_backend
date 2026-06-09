@@ -52,6 +52,7 @@ class ChatResponse(BaseModel):
     response: str
     sources: List[Source]
     chat_id: str  # Include chat_id in response
+    message_id: Optional[str] = None  # assistant message_id for feedback tracking
 
     class Config:
         json_encoders = {

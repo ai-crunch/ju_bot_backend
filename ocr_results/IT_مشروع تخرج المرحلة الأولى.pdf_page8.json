@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 8,
+    "timestamp": "2026-06-09T09:02:24.998036",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### 1.1 General Introduction\n\nIn recent decades, plastic materials have become deeply integrated into modern construction, interior finishing, industrial applications, and consumer products. Their widespread adoption is attributed to properties such as durability, low density, ease of manufacturing, and economic efficiency [1].\n\nHowever—despite these advantages—plastics represent one of the most critical challenges in fire safety engineering, particularly due to their behavior under elevated temperatures and flame exposure.\n\nWhen subjected to heat, conventional plastics undergo rapid thermal decomposition, releasing significant amounts of heat and producing dense smoke rich in toxic combustion gases, chiefly carbon monoxide [2]. This smoke not only accelerates fire growth but also leads to drastic visibility reduction, making evacuation more difficult and increasing the likelihood of injuries and fatalities. Numerous studies highlight that smoke inhalation remains the leading cause of death in modern fires involving polymeric materials [3].\n\nBeyond fire-related hazards, traditional plastics pose a considerable environmental challenge, as they may require centuries to degrade and accumulate extensively in soil and marine environments [4]. Their manufacturing relies heavily on non-renewable petrochemical resources, contributing to increased carbon emissions and global pollution.\n\nThese concerns have motivated the search for materials that provide a balance between performance, safety, and sustainability. Among these alternatives, bio-plastic has gained attention due to its origin from renewable, biodegradable sources [5]. Bio-plastics not only reduce long-term environmental impact but may also exhibit distinct fire behavior arising from their different chemical structure, influencing characteristics such as ignitability, heat release rate, and smoke production [6].\n\nAccordingly, this project aims to provide a systematic and scientifically grounded evaluation of the fire flammability characteristics of bio-plastic materials, with the objective of analyzing their... (text continues)."
+}

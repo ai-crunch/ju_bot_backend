@@ -36,8 +36,11 @@ def seed_system_config():
             "retrieval": {
                 "chunk_size": 300,
                 "chunk_overlap": 50,
-                "retrieved_chunks": 5,
+                "retrieved_chunks": 20,
                 "chunk_threshold": 300,
+                "hybrid_top_k": 20,
+                "rerank_top_k": 5,
+                "enable_reranker": True,
             },
             "llm": {
                 "provider": "openai",

@@ -3,18 +3,14 @@ from pydantic import BaseModel
 from typing import List
 import os
 import shutil
-import io
 import json
-import base64
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
-import fitz
-from PIL import Image
-from openai import OpenAI
 import config
 from routers.v2.department.dependencies import get_current_department_editor, verify_department_ownership
 from utils.logger import get_logger
+from utils.ocr import pdf_to_images, ocr_with_gpt
 from utils.vdb import QdrantVDB
 
 logger = get_logger(__name__)
@@ -30,56 +26,17 @@ def get_qdrant_client():
     return QdrantVDB().client
 
 
-def pdf_to_images(pdf_path):
-    doc = fitz.open(pdf_path)
-    images = []
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        pix = page.get_pixmap(dpi=200)
-        img = Image.open(io.BytesIO(pix.tobytes("png")))
-        images.append((page_num + 1, img))
-    doc.close()
-    return images
 
+def save_ocr_result(metadata, text, cache_filename: str = None) -> str:
+    """
+    Persist an OCR result to disk.
 
-def ocr_with_gpt(image, api_key, model="gpt-4o-mini"):
-    client = OpenAI(api_key=api_key)
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    buffer.seek(0)
-    image_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
-    prompt = (
-        "You are an expert OCR and visual document analyzer. "
-        "Extract all text from this page accurately. "
-        "If the page contains tables, charts, or images, describe them in natural language "
-        "within their logical context. Keep structure consistent and readable."
-    )
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a precise document transcription and summarization assistant.",
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{image_data}"},
-                    },
-                ],
-            },
-        ],
-    )
-    return response.choices[0].message.content.strip()
-
-
-def save_ocr_result(metadata, text):
-    file_out = os.path.join(
-        OCR_RESULTS_DIR, f"{metadata['file_name']}_page{metadata['page_number']}.json"
-    )
+    ``cache_filename`` overrides the default ``{file_name}_page{n}.json``
+    naming so callers can namespace by department without mutating metadata.
+    """
+    if cache_filename is None:
+        cache_filename = f"{metadata['file_name']}_page{metadata['page_number']}.json"
+    file_out = os.path.join(OCR_RESULTS_DIR, cache_filename)
     with open(file_out, "w", encoding="utf-8") as f:
         json.dump({"metadata": metadata, "text": text}, f, ensure_ascii=False, indent=2)
     return file_out
@@ -159,10 +116,14 @@ async def get_knowledge_base(user: dict = Depends(get_current_department_editor)
         )
 
 
-@router.put("/toggle/{source_id}")
+class ToggleStatusRequest(BaseModel):
+    id: str
+    is_active: bool  # required — no default prevents silent re-enabling on partial requests
+
+
+@router.put("/toggle")
 async def toggle_source_status(
-    source_id: str,
-    is_active: bool = True,
+    request: ToggleStatusRequest,
     user: dict = Depends(get_current_department_editor),
 ):
     try:
@@ -174,8 +135,8 @@ async def toggle_source_status(
             limit=1,
             with_payload=True,
             with_vectors=False,
-            filter=Filter(
-                must=[FieldCondition(key="file_path", match=MatchValue(value=source_id))]
+            scroll_filter=Filter(
+                must=[FieldCondition(key="file_path", match=MatchValue(value=request.id))]
             ),
         )
 
@@ -185,8 +146,8 @@ async def toggle_source_status(
                 raise HTTPException(status_code=403, detail="This source does not belong to your department")
 
         vdb = QdrantVDB()
-        vdb.toggle_source_status(source_id, is_active)
-        return {"status": "success", "id": source_id, "is_active": is_active}
+        vdb.toggle_source_status(request.id, request.is_active)
+        return {"status": "success", "id": request.id, "is_active": request.is_active}
     except HTTPException:
         raise
     except Exception as e:
@@ -197,8 +158,9 @@ async def toggle_source_status(
         )
 
 
-@router.delete("/{file_path:path}")
-async def delete_source(file_path: str, user: dict = Depends(get_current_department_editor)):
+@router.delete("/delete")
+async def delete_source(source_id: str, user: dict = Depends(get_current_department_editor)):
+    file_path = source_id
     try:
         client = get_qdrant_client()
         collection_name = config.QDRANT["collection_name"]
@@ -208,15 +170,17 @@ async def delete_source(file_path: str, user: dict = Depends(get_current_departm
             limit=1,
             with_payload=True,
             with_vectors=False,
-            filter=Filter(
+            scroll_filter=Filter(
                 must=[FieldCondition(key="file_path", match=MatchValue(value=file_path))]
             ),
         )
 
+        dept_id = None
         if scroll_result:
             payload = scroll_result[0].payload
             if not verify_department_ownership(payload, user):
                 raise HTTPException(status_code=403, detail="This source does not belong to your department")
+            dept_id = payload.get("metadata", {}).get("department_id")
 
         client.delete(
             collection_name=collection_name,
@@ -224,6 +188,22 @@ async def delete_source(file_path: str, user: dict = Depends(get_current_departm
                 must=[FieldCondition(key="file_path", match=MatchValue(value=file_path))]
             ),
         )
+
+        # Remove OCR cache files so a future re-upload gets a fresh OCR pass
+        # instead of reusing stale cached text.
+        dept_id = dept_id or user.get("department_id") or "unknown"
+        cache_prefix = f"{dept_id}_{os.path.basename(file_path)}_page"
+        cleaned = 0
+        for fname in os.listdir(OCR_RESULTS_DIR):
+            if fname.startswith(cache_prefix) and fname.endswith(".json"):
+                try:
+                    os.remove(os.path.join(OCR_RESULTS_DIR, fname))
+                    cleaned += 1
+                except OSError as exc:
+                    logger.warning(f"Could not remove OCR cache file {fname}: {exc}")
+        if cleaned:
+            logger.info(f"Removed {cleaned} OCR cache file(s) for {file_path}")
+
         return {"status": "success", "message": f"Source {file_path} deleted"}
     except HTTPException:
         raise
@@ -237,7 +217,9 @@ async def delete_source(file_path: str, user: dict = Depends(get_current_departm
 
 @router.post("/upload")
 async def upload_documents(
-    files: List[UploadFile] = File(...), user: dict = Depends(get_current_department_editor)
+    files: List[UploadFile] = File(...),
+    is_legal_document: bool = False,
+    user: dict = Depends(get_current_department_editor),
 ):
     config.reload_config()
     api_key = config.OPENAI.get("api_key")
@@ -263,7 +245,7 @@ async def upload_documents(
             )
             continue
 
-        file_path = os.path.join(upload_dir, file.filename)
+        file_path = os.path.join(upload_dir, os.path.basename(file.filename))
         try:
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
@@ -272,8 +254,11 @@ async def upload_documents(
             processed_pages = 0
 
             for page_num, image in pages:
-                ocr_filename = f"{file.filename}_page{page_num}.json"
-                ocr_path = os.path.join(OCR_RESULTS_DIR, ocr_filename)
+                # Namespace the OCR cache file by department so two departments
+                # uploading a file with the same basename never share a cache entry.
+                dept_prefix = department_id or "unknown"
+                ocr_cache_filename = f"{dept_prefix}_{file.filename}_page{page_num}.json"
+                ocr_path = os.path.join(OCR_RESULTS_DIR, ocr_cache_filename)
 
                 if os.path.exists(ocr_path):
                     with open(ocr_path, "r", encoding="utf-8") as f:
@@ -289,7 +274,7 @@ async def upload_documents(
                         "department_id": department_id,
                         "department_name": department_name,
                     }
-                    save_ocr_result(metadata, text)
+                    save_ocr_result(metadata, text, ocr_cache_filename)
                     ocr_data = {"metadata": metadata, "text": text}
 
                 merged_metadata = {
@@ -298,7 +283,9 @@ async def upload_documents(
                     "department_id": department_id,
                     "department_name": department_name,
                 }
-                vdb.embed_ocr_results(ocr_data, merged_metadata)
+                vdb.embed_ocr_results(
+                    ocr_data, merged_metadata, use_semantic=is_legal_document
+                )
                 processed_pages += 1
 
             results.append({

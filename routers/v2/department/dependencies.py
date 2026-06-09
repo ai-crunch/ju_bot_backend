@@ -1,17 +1,18 @@
-from fastapi import HTTPException, status
+from fastapi import Header, HTTPException, status
 from models.user import UserDB
+from typing import Optional
 
 user_db = UserDB()
 
 
-async def get_current_department_editor(user_id: str):
-    """
-    يسمح لـ department_editor و admin فقط بالوصول
-    """
-    if not user_id:
+async def get_current_department_editor(authorization: Optional[str] = Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authentication required")
-    
-    user = user_db.get_user_by_id(user_id)
+    api_key = authorization.removeprefix("Bearer ").strip()
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    user = user_db.get_user_by_api_key(api_key)
     if not user:
         raise HTTPException(status_code=403, detail="User not found")
     

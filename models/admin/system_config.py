@@ -74,16 +74,39 @@ class EmbeddingConfig(BaseModel):
 
 
 class RetrievalConfig(BaseModel):
-    chunk_size: int = 300
+    chunk_size: int = 500
     chunk_overlap: int = 50
-    retrieved_chunks: int = 5
+    retrieved_chunks: int = 20
     chunk_threshold: int = 300
+    hybrid_top_k: int = 20
+    rerank_top_k: int = 5
+    enable_reranker: bool = True
+
+
+class SemanticChunkingConfig(BaseModel):
+    """Dynamic settings for the legal semantic chunking pipeline."""
+
+    enabled: bool = True
+    max_chunk_word_count: int = 600
+    target_chunk_word_count: int = 350
+    min_chunk_word_count: int = 150
+    language_of_output: str = "Arabic"
+    context_injection_enabled: bool = True
+    hierarchy_delimiter: str = " -> "
+    enforce_sentence_boundaries: bool = True
+
+
+class SemanticCacheConfig(BaseModel):
+    enabled: bool = True
+    similarity_threshold: float = 0.90
+    feedback_ratio: float = 1.30
 
 
 class LLMConfig(BaseModel):
     provider: LLMProvider = LLMProvider.OPENAI
     model: LLMModel = LLMModel.GPT_4O_MINI
     temperature: float = 0.0
+    max_tokens: int = 4096
     api_key: Optional[str] = None
 
     @classmethod
@@ -121,9 +144,12 @@ class SystemFlags(BaseModel):
 class SystemConfig(BaseModel):
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
+    semantic_chunking: SemanticChunkingConfig = Field(default_factory=SemanticChunkingConfig)
+    semantic_cache: SemanticCacheConfig = Field(default_factory=SemanticCacheConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     vector_db: VectorDBConfig = Field(default_factory=VectorDBConfig)
     system_flags: SystemFlags = Field(default_factory=SystemFlags)
+    system_instructions: Optional[str] = None
 
 
 def get_system_config_from_db() -> Dict[str, Any]:

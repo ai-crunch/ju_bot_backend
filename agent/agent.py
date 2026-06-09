@@ -1,3 +1,4 @@
+import os
 from typing import List, Callable, Tuple
 from pydantic import BaseModel, Field
 from pymongo import MongoClient
@@ -17,6 +18,20 @@ from models.qa_messages import Message
 from utils.logger import get_logger
 
 import config
+
+
+def _get_system_message() -> str:
+    """Returns the active system message, preferring DB config over file fallback."""
+    if config.SYSTEM_INSTRUCTIONS:
+        return config.SYSTEM_INSTRUCTIONS
+    return SYSTEM_PROMPT
+
+
+def _get_instructions() -> str:
+    """Returns the active instructions, preferring DB config if set."""
+    # For now, system_instructions serves as the full system message.
+    # If we want separate instructions override in the future, add a config key.
+    return INSTRUCTIONS
 
 logger = get_logger(__name__)
 
@@ -62,16 +77,26 @@ class JUAgent:
         description: str = DESCRIPTION,
         instructions: str = INSTRUCTIONS,
         role: str = ROLE,
-        system_message: str = SYSTEM_PROMPT,
+        system_message: str = "",
         output_schema: BaseModel = AgentOutputSchema,
         tools: List[Callable] = tools,
         add_history_to_context: bool = True,
     ):
+        # Resolve system message dynamically from config if not explicitly provided
+        active_system_message = system_message if system_message else _get_system_message()
+        active_instructions = instructions if instructions else _get_instructions()
+
         if model is None:
+            api_key = config.OPENAI.get("api_key") or os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "OpenAI API key is not configured. Set OPENAI_API_KEY in your .env file."
+                )
             model = OpenAIChat(
                 id=config.OPENAI["model"],
-                api_key=config.OPENAI["api_key"],
+                api_key=api_key,
                 temperature=config.OPENAI["temperature"],
+                max_tokens=config.MAX_TOKENS,
             )
 
         # Apply reasoning instructions if enabled in system config
@@ -87,9 +112,9 @@ class JUAgent:
             reasoning=config.ENABLE_REASONING,
             # Agent description and instructions
             description=description,
-            instructions=instructions,
+            instructions=active_instructions,
             role=role,
-            system_message=system_message,
+            system_message=active_system_message,
             # Agent Output Schema
             output_schema=output_schema,
             tools=tools,

@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 24,
+    "timestamp": "2026-06-09T09:05:04.919142",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "**Figure (3.3)**\n\n**Differential Scanning Calorimetry (DSC)**\n\n---\n\n### 3.3.3 Parameters Measured\n\nDSC allows determination of:\n\n- **Glass transition temperature (Tg).**\n- **Melting temperature (Tm).**\n- **Crystallization temperature (Tc).**\n- **Enthalpy changes (ΔH).**\n- **Degree of crystallinity (when applicable).**\n\nThese parameters help assess how compositional modifications affect thermal behavior and potentially improve fire resistance.\n\n---\n\n### Description of Equipment\nThe image depicts a Differential Scanning Calorimeter (DSC) from Mettler Toledo, situated on a lab countertop. Adjacent to the DSC is a computer monitor displaying a thermal analysis graph, typical of DSC measurements, illustrating temperature transitions. The workspace includes laboratory equipment in the background, with gas tanks visible."
+}

@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 5,
+    "timestamp": "2026-06-09T09:02:03.996168",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "**Arabic Abstract** ................................................................................... 86\n\n---\n\n**LIST OF FIGURES**\n\n| Figure | Description        | Page |\n|--------|-------------------|------|\n| 1.1    | name of Figure 1  | 3    |\n| 1.2    | name of Figure 2. | 5    |\n| 3.1    |                   |      |\n| 4.2    |                   |      |\n\n--- \n\nThe page includes a title \"LIST OF FIGURES\" followed by a table with three columns: Figure, Description, and Page. The first two entries are filled in with figure numbers and descriptions, while two entries are left blank. The page number references indicate where to find the corresponding figures in the document."
+}

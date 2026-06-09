@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 25,
+    "timestamp": "2026-06-09T09:05:15.200293",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "**3.4 Thermal Conductivity Measurement (TCA 300-DTX)**\n\n**3.4.1 Introduction**\n\nThermal conductivity is a fundamental property that describes a material’s ability to conduct heat and is expressed in W/(m·K). Materials with low thermal conductivity are particularly valuable in fire safety and building applications due to their enhanced insulation performance.\n\nIn this study, thermal conductivity measurements were conducted using the TCA 300-DTX device manufactured by Taurus Instruments GmbH.\n\n---\n\n**3.4.2 Principle of Operation**\n\nThe TCA 300-DTX operates based on the heat flow meter method, where a specimen is placed between two plates maintained at different temperatures. A steady-state temperature gradient is established, and the heat flux through the specimen is measured. Thermal conductivity is calculated using the measured heat flow, specimen geometry, and temperature difference.\n\nThe measurement procedure complies with ISO 8301 and ASTM C518, ensuring accuracy and reproducibility of results.\n\n---\n\n**Figure (3.4)** illustrates the TCA 300-DTX thermal conductivity measurement device used to determine the thermal conductivity of the tested materials."
+}

@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 20,
+    "timestamp": "2026-06-09T09:04:27.313913",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### 3.1 Cone Calorimeter\n\n#### 3.1.1 Introduction\n\nThe Cone Calorimeter is a standard fire-testing device based on the principle of oxygen consumption during combustion. It is widely used in fire research laboratories to evaluate the fire behavior of materials under controlled conditions. Due to its reliability and repeatability, the cone calorimeter is considered the most significant bench-scale instrument in fire testing and is commonly used to provide input data for fire modeling and simulation studies.\n\nThe device exposes the surface of a test specimen to a predefined external radiant heat flux. Once ignition occurs, the specimen burns in excess air, allowing several fire-related parameters to be measured. These parameters include time to ignition, heat release rate, mass loss rate, smoke production, and gas emissions, which together describe the combustion behavior of the material.\n\nThe cone calorimeter operates according to internationally recognized standards, namely ISO 5660-1 and ASTM E1354, ensuring consistency and reproducibility of test results.\n\n#### 3.1.2 General Description\n\nThe cone calorimeter consists of several integrated components that work together to control, measure, and record the combustion process. These components include the cone heater, specimen holder, load cell, exhaust system, oxygen analyzer, and data acquisition system. A schematic representation of these components is shown in Figure (3.1).\n\nThe device allows for precise control of heat flux levels, enabling systematic evaluation of material behavior under different fire exposure conditions."
+}

@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 21,
+    "timestamp": "2026-06-09T09:04:37.068607",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### Cone Calorimeter\n\n**Figure (3.1)**\n\n---\n\n#### 3.1.3 Parameters Measured\n\nThe cone calorimeter provides a comprehensive set of fire performance parameters, including:\n\n- **Time to ignition.**\n- **Heat Release Rate (HRR).**\n- **Mass Loss Rate (MLR).**\n- **Total heat released.**\n- **Smoke production.**\n- **Toxic gas yields (depending on analyzer configuration).**\n\nIn the present research, particular emphasis is placed on **heat release rate** and **mass loss rate**, as these parameters are critical indicators of fire intensity and material flammability.\n\n---\n\n**Description of the Visual Context:**\n\nThe image shows a cone calorimeter, a specialized apparatus used in fire testing, with flames observed in the testing chamber. A computer monitor displays data, likely related to the fire performance parameters being measured, while a control panel with various buttons and displays is visible."
+}

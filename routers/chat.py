@@ -5,6 +5,7 @@ from typing import List, Literal, Dict, Any, Optional
 from urllib.parse import urlparse
 from openai import OpenAI
 import os
+import unicodedata
 import urllib.parse
 
 from utils.vdb import QdrantVDB
@@ -22,7 +23,18 @@ router = APIRouter(
     tags=["chat"],
 )
 qdrant_vdb = QdrantVDB()
-client = OpenAI(api_key=config.OPENAI["api_key"])
+
+# Lazy OpenAI client to avoid crashing on startup when API key is missing / empty.
+_openai_client: OpenAI | None = None
+
+def _get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        key = config.OPENAI.get("api_key") or os.getenv("OPENAI_API_KEY")
+        if not key:
+            raise HTTPException(status_code=503, detail="OpenAI API key is not configured.")
+        _openai_client = OpenAI(api_key=key)
+    return _openai_client
 
 
 class Message(BaseModel):
@@ -63,7 +75,7 @@ class ChatResponse(BaseModel):
 
 
 def get_llm_response(messages: List[dict]) -> str:
-    response = client.chat.completions.create(
+    response = _get_openai_client().chat.completions.create(
         model=config.OPENAI["model"],
         messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
     )
@@ -183,6 +195,10 @@ def get_document(request: Request, file_path: str):
         # Fix doubled 'data/data/' prefix if present
         if decoded_file_path.startswith("data/data/"):
             decoded_file_path = decoded_file_path.replace("data/data/", "data/", 1)
+        # Normalise to NFC so that Arabic paths stored as NFD decomposed characters
+        # (e.g. ا + combining hamza ٔ instead of the precomposed أ) match the
+        # actual filenames on disk, which use NFC.
+        decoded_file_path = unicodedata.normalize("NFC", decoded_file_path)
         print(f"Requesting document (decoded): {decoded_file_path}")
     except Exception as decode_error:
         print(f"Error decoding file path: {decode_error}")
@@ -305,6 +321,7 @@ def get_document_as_image(file_path: str, page: int = 0):
     # URL decode the file path with proper UTF-8 handling
     try:
         decoded_file_path = urllib.parse.unquote(file_path, encoding="utf-8")
+        decoded_file_path = unicodedata.normalize("NFC", decoded_file_path)
         print(f"Decoded file path: {decoded_file_path}")
     except Exception as decode_error:
         print(f"Error decoding file path: {decode_error}")
@@ -382,6 +399,7 @@ def get_document_info(file_path: str):
     # URL decode the file path with proper UTF-8 handling
     try:
         decoded_file_path = urllib.parse.unquote(file_path, encoding="utf-8")
+        decoded_file_path = unicodedata.normalize("NFC", decoded_file_path)
     except Exception as decode_error:
         print(f"Error decoding file path: {decode_error}")
         raise HTTPException(status_code=400, detail="Invalid file path encoding")

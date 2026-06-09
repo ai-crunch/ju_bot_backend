@@ -10,7 +10,7 @@ API_URL = "http://127.0.0.1:8000/api/agent"
 headers = {"Content-Type": "application/json"}
 
 
-def test_chat_api(messages):
+def run_chat_test(messages):
     """
     Sends a POST request to the chat API endpoint and prints the response.
 
@@ -52,46 +52,41 @@ def test_chat_api(messages):
         print("\nError: Could not decode JSON from the response.")
 
 
-# --- Test Cases ---
-# Each test case is a list of messages representing a conversation.
+if __name__ == "__main__":
+    # --- Test Cases ---
+    print("--- Running Test Case 1: Simple Greeting ---")
+    run_chat_test([{"role": "user", "content": "Hello"}])
 
-# Test Case 1: Simple greeting
-print("--- Running Test Case 1: Simple Greeting ---")
-test_chat_api([{"role": "user", "content": "Hello"}])
+    print("\n" + "=" * 50 + "\n")
 
-print("\n" + "=" * 50 + "\n")
+    print("--- Running Test Case 2: University-related question ---")
+    run_chat_test(
+        [
+            {
+                "role": "user",
+                "content": "What are the admission requirements for graduate studies at the University of Jordan?",
+            }
+        ]
+    )
 
-# Test Case 2: A question about the university
-print("--- Running Test Case 2: University-related question ---")
-test_chat_api(
-    [
-        {
-            "role": "user",
-            "content": "What are the admission requirements for graduate studies at the University of Jordan?",
-        }
-    ]
-)
+    print("\n" + "=" * 50 + "\n")
 
-print("\n" + "=" * 50 + "\n")
+    print("--- Running Test Case 3: Non-university question ---")
+    run_chat_test([{"role": "user", "content": "Who invented the telephone?"}])
 
-# Test Case 3: A question not related to the university
-print("--- Running Test Case 3: Non-university question ---")
-test_chat_api([{"role": "user", "content": "Who invented the telephone?"}])
+    print("\n" + "=" * 50 + "\n")
 
-print("\n" + "=" * 50 + "\n")
-
-# Test Case 4: A more complex, multi-turn conversation
-print("--- Running Test Case 4: Multi-turn conversation ---")
-test_chat_api(
-    [
-        {
-            "role": "user",
-            "content": "What are the office hours for the registration department?",
-        },
-        {
-            "role": "assistant",
-            "content": "I am not sure. I need to check the documents.",
-        },
-        {"role": "user", "content": "Could you try to find them?"},
-    ]
-)
+    print("--- Running Test Case 4: Multi-turn conversation ---")
+    run_chat_test(
+        [
+            {
+                "role": "user",
+                "content": "What are the office hours for the registration department?",
+            },
+            {
+                "role": "assistant",
+                "content": "I am not sure. I need to check the documents.",
+            },
+            {"role": "user", "content": "Could you try to find them?"},
+        ]
+    )

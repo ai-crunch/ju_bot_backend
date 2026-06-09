@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "file_name": "مشروع تخرج المرحلة الأولى.pdf",
+    "file_path": "data/uploads/IT/مشروع تخرج المرحلة الأولى.pdf",
+    "page_number": 22,
+    "timestamp": "2026-06-09T09:04:48.683058",
+    "model": "gpt-4o-mini",
+    "department_id": "IT",
+    "department_name": "IT"
+  },
+  "text": "### 3.2 Thermogravimetric Analysis (TGA)\n\n#### 3.2.1 Introduction\n\nThermogravimetric Analysis (TGA) is a thermal analysis technique used to evaluate the mass change of a material as a function of temperature or time under a controlled atmosphere. TGA is widely applied in polymer science and fire research to assess thermal stability, decomposition behavior, and residual char formation, all of which are relevant to fire performance.\n\n#### 3.2.2 Principle of Operation\n\nIn a TGA test, a small sample is placed on a high-precision microbalance inside a temperature-controlled furnace. The sample is subjected to a predefined heating program while exposed to an inert or oxidative atmosphere. As temperature increases, physical or chemical changes such as evaporation, decomposition, or oxidation occur, leading to measurable mass loss.\n\nThe instrument continuously records mass changes, allowing identification of degradation stages and decomposition mechanisms [25].\n\n**Figure (3.2)** illustrates the Thermogravimetric Analysis (TGA) device used for evaluating the thermal stability of the tested materials.\n\n---\n\n**Image Description for Figure (3.2):**  \nThe image shows a Thermogravimetric Analysis (TGA) device, which features a digital display panel for monitoring, with a microbalance component for sample weighing, situated in a laboratory setting."
+}
